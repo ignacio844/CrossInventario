@@ -13,7 +13,7 @@ export function reconcile(data) {
   for(const node of parent.keys()){const id=root(node);if(!groups.has(id))groups.set(id,{old:[],positions:[]});groups.get(id)[node.startsWith('o:')?'old':'positions'].push(node.slice(2));}
   for(const g of groups.values()){g.old.sort();g.positions.sort();}
   const catalog=new Map(data.products.map(p=>[p[0],p]));const map=new Map();
-  const make=(group,sku)=>{const id=JSON.stringify([group,sku]);if(!map.has(id))map.set(id,{id,group,sku,description:catalog.get(sku)?.[1]||'',saleUnit:catalog.get(sku)?.[2]??null,oldQty:0,wmsQty:0,oldPresent:false,wmsPresent:false,oldDetails:[],wmsDetails:[],positions:groups.get(group)?.positions??[group.slice(2)],oldPositions:groups.get(group)?.old??[],mapped:groups.has(group)});return map.get(id);};
+  const make=(group,sku)=>{const id=JSON.stringify([group,sku]);if(!map.has(id))map.set(id,{id,group,sku,description:catalog.get(sku)?.[1]||'',saleUnit:catalog.get(sku)?.[2]??null,barcode:String(catalog.get(sku)?.[3]??''),oldQty:0,wmsQty:0,oldPresent:false,wmsPresent:false,oldDetails:[],wmsDetails:[],positions:groups.get(group)?.positions??[group.slice(2)],oldPositions:groups.get(group)?.old??[],mapped:groups.has(group)});return map.get(id);};
   for(const [sku,q,pos,dep] of data.octosis){if(!DEPOSITS.includes(dep))continue; const ok=octKey(pos);const group=parent.has('o:'+ok)?root('o:'+ok):'o:'+ok;const r=make(group,sku);r.oldPresent=true;r.oldQty+=q;r.oldDetails.push({position:pos,deposit:dep,quantity:q});}
   const active=new Set();
   for(const [sku,q,pos,depth,container,bultos,description] of data.wms){const wk=wmsKey(pos),group=parent.has('w:'+wk)?root('w:'+wk):'w:'+wk;active.add(group);const r=make(group,sku);r.wmsPresent=true;r.wmsQty+=q;if(!r.description)r.description=description;r.wmsDetails.push({position:wk,depth,container,quantity:q,bultos});}
@@ -22,6 +22,8 @@ export function reconcile(data) {
     const group=groups.get(r.group);r.active=active.has(r.group);r.delta=r.wmsQty-r.oldQty;
     r.kind=!r.oldPresent?'Solo WMS':!r.wmsPresent?'Solo Octosis':r.delta!==0?'Cantidad distinta':'Coincide';
     r.multiple=!!group&&group.positions.length>1;
+    r.expectedPositions=[...new Set(r.oldDetails.flatMap(d=>[...(oldLinks.get(octKey(d.position))||[])]))].sort();
+    r.locationMatches=!r.wmsPresent?null:!r.mapped?false:!r.expectedPositions.length?null:r.wmsDetails.every(d=>r.expectedPositions.includes(wmsKey(d.position)));
     r.fingerprint=fingerprint([r.oldDetails.slice().sort((a,b)=>JSON.stringify(a).localeCompare(JSON.stringify(b))),r.wmsDetails.slice().sort((a,b)=>JSON.stringify(a).localeCompare(JSON.stringify(b))),r.positions,r.oldPositions,r.saleUnit]);
     const saved=data.cases[r.id];r.review=saved??{};r.changed=!!saved&&saved.fingerprint!==r.fingerprint;
     r.status=r.changed?'Revisar cambio':saved?.status??(r.active?'Pendiente':'Sin carga WMS');
@@ -31,12 +33,14 @@ export function reconcile(data) {
   rows.sort((a,b)=>Number(b.active)-Number(a.active)||a.positions[0].localeCompare(b.positions[0],undefined,{numeric:true})||a.sku.localeCompare(b.sku));
   return {rows,stats:{activeGroups:active.size,records:rows.filter(r=>r.active).length,missingUnits:rows.filter(r=>r.saleUnit==null).length,unmapped:rows.filter(r=>!r.mapped).length,ambiguousOld:[...oldLinks.values()].filter(s=>s.size>1).length},revision:data.revision,meta:data.meta};
 }
+export function requiresReason(row,action){return !(action==='accept'&&row.kind==='Coincide'&&row.locationMatches===true);}
 export function applyAction(data,{id,action,reason,quantity,expectedRevision,requestId},user,now=new Date().toISOString()){
   if(!user?.email)throw new Error('Iniciá sesión para guardar.');
   if(requestId&&data.events.some(e=>e.requestId===requestId))return data;
   if(expectedRevision!==data.revision)throw Object.assign(new Error('Otro usuario actualizó los datos. Recargá y revisá antes de guardar.'),{status:409});
   const row=reconcile(data).rows.find(r=>r.id===id);if(!row||!row.active)throw new Error('El caso no tiene carga WMS registrada.');
-  if(!String(reason??'').trim())throw new Error('Escribí un motivo o una observación.');
+  reason=String(reason??'').trim();
+  if(requiresReason(row,action)&&!reason)throw new Error('Escribí un motivo o una observación.');
   if(reason.length>2000)throw new Error('La observación admite hasta 2.000 caracteres.');
   const actions={'request-c2':'Solicitado C2','record-c2':'C2 registrado','accept':'Aceptado C3','adjust':'Ajustado en WMS','verify':'Verificado C3','reopen':'Pendiente'};
   if(!actions[action])throw new Error('Acción desconocida.');

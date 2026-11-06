@@ -20,7 +20,7 @@ export async function parseWorkbook(buffer,type){
    const get=(r,h)=>value(r.getCell(headers[h]));
    s.eachRow((r,i)=>{if(i===1)return;const sku=text(get(r,type==='wms'?'COD. ART':'CODIGO'));if(!sku)return;
      if(type==='octosis'){const dep=text(get(r,'DEPOSITO'));if(!DEPOSITS.includes(dep))return;const q=num(get(r,'SALDO'),`Fila ${i}`);if(q<0)warnings.push(`Fila ${i}: saldo negativo (${sku}).`);rows.push([sku,q,text(get(r,'ESTANTERIA')),dep]);}
-     if(type==='products'){const q=num(get(r,'BULTO'),`Fila ${i}, BULTO`);if(q<=0)throw new Error(`Fila ${i}: BULTO debe ser mayor a cero.`);rows.push([sku,text(get(r,'DESCRIPCION')),q]);}
+     if(type==='products'){const q=num(get(r,'BULTO'),`Fila ${i}, BULTO`);if(q<=0)throw new Error(`Fila ${i}: BULTO debe ser mayor a cero.`);const barcodeHeader=['CODIGO DE BARRAS','CODIGO DE BARRA','CODIGO BARRAS','CODIGO BARRA'].find(h=>headers[h]);rows.push([sku,text(get(r,'DESCRIPCION')),q,barcodeHeader?text(get(r,barcodeHeader)):'']);}
      if(type==='wms'){if(text(get(r,'DEPOSITO')).toUpperCase()!=='CD ESCOBAR')throw new Error(`Fila ${i}: el reporte incluye otro depósito. Exportá solamente CD ESCOBAR.`);const q=num(get(r,'UNIDADES'),`Fila ${i}`);if(q<0)warnings.push(`Fila ${i}: stock WMS negativo (${sku}).`);const pos=['CARA','COLUMNA','NIVEL'].map(h=>text(get(r,h)));if(pos.some(x=>!x))throw new Error(`Fila ${i}: posición incompleta.`);rows.push([sku,q,wmsKey(pos.join(' ')),text(get(r,'PROFUNDIDAD')),text(get(r,'CONTENEDOR')),num(get(r,'BULTOS'),`Fila ${i}, BULTOS`),text(get(r,'ARTICULO'))]);}
    });
  }

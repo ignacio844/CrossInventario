@@ -1,6 +1,7 @@
 import {reconcile,applyAction} from './domain.js';
 
 import {demoData} from './demo.js';
+import {restoreSession,saveSession,clearSession} from './session.js';
 
 let config,local,token='',role='C-Administrativo',pending;const storageKey='escobar-review-v1';
 
@@ -13,6 +14,10 @@ async function saveLocal(next){const db=await localDb();return new Promise((reso
 export const setToken=v=>{token=v;};
 
 export const setRole=v=>{role=v;};
+export const hasSession=()=>!!token;
+export async function signIn(credential){const session=await request('/session',{},'POST',credential);token=session.token;try{saveSession(localStorage,session);}catch{}return session.user;}
+function forgetSession(){token='';try{clearSession(localStorage);}catch{}}
+export async function signOut(){try{await request('/logout',{});}finally{forgetSession();}}
 
 export async function init(){
 
@@ -20,11 +25,12 @@ export async function init(){
 
  catch{if(import.meta.env.MODE==='vercel')throw new Error('No se pudo conectar con el servidor. Reintentá en unos segundos.');config={mode:'preview',manualWms:true};const r=await fetch('/seed.json');local=r.ok?await r.json():demoData();const saved=await readLocal();if(saved)local=saved;}
 
+ if(config.mode==='sheets'){try{const session=restoreSession(localStorage);if(session)token=session.token;}catch{}}
  return config;
 
 }
 
-async function request(path,body,method){const headers={'x-demo-role':role};if(token)headers.Authorization='Bearer '+token;if(body&&!(body instanceof FormData))headers['Content-Type']='application/json';const r=await fetch('/api'+path,{method:method||(body?'POST':'GET'),headers,body:body instanceof FormData?body:body?JSON.stringify(body):undefined});let result=await r.json();if(!r.ok)throw new Error(result.error||'Error de conexión.');if(result.packed)result=await unpack(result.packed);return result.rawState?{...reconcile(result.rawState),user:result.user}:result;}
+async function request(path,body,method,credential){const headers={'x-demo-role':role};if(credential||token)headers.Authorization='Bearer '+(credential||token);if(body&&!(body instanceof FormData))headers['Content-Type']='application/json';const r=await fetch('/api'+path,{method:method||(body?'POST':'GET'),headers,body:body instanceof FormData?body:body?JSON.stringify(body):undefined});let result=await r.json();if(!r.ok){if(r.status===401&&!credential){forgetSession();if(typeof window!=='undefined')window.dispatchEvent(new Event('inventory-session-expired'));}throw new Error(result.error||'Error de conexión.');}if(result.packed)result=await unpack(result.packed);return result.rawState?{...reconcile(result.rawState),user:result.user}:result;}
 
 async function pack(value){const stream=new Blob([JSON.stringify(value)]).stream().pipeThrough(new CompressionStream('gzip'));const bytes=new Uint8Array(await new Response(stream).arrayBuffer());let text='';for(let i=0;i<bytes.length;i+=32768)text+=String.fromCharCode(...bytes.subarray(i,i+32768));return {packed:btoa(text)};}
 

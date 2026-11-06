@@ -8,7 +8,7 @@ export default async function handler(req,res){
  if(!endpoint)return res.status(503).json({error:'Falta configurar APPS_SCRIPT_URL en Vercel. Consultá DEPLOY_VERCEL.md.'});
  if(!/^https:\/\/script\.google\.com\/macros\/s\/[A-Za-z0-9_-]+\/exec$/.test(endpoint))return res.status(503).json({error:'APPS_SCRIPT_URL debe ser la URL /exec del despliegue Apps Script.'});
  const token=(req.headers.authorization||'').replace(/^Bearer\s+/i,'');if(!token)return res.status(401).json({error:'Iniciá sesión con Google.'});
- const routes={'GET:state':'state','GET:history':'history','POST:action':'action','POST:import/preview':'preview','POST:import/commit':'import'};
+ const routes={'POST:session':'session','POST:logout':'logout','GET:state':'state','GET:history':'history','POST:action':'action','POST:import/preview':'preview','POST:import/commit':'import'};
  const op=routes[req.method+':'+route];if(!op)return res.status(404).json({error:'Operación no disponible.'});
  let body=req.body??{};if(typeof body==='string'){try{body=JSON.parse(body);}catch{return res.status(400).json({error:'Solicitud inválida.'});}}
  try{

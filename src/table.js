@@ -36,11 +36,11 @@ export function columnMatches(row, filters) {
   const positionMatches = (values, filter) => !filter || values.some(value => positionText(value).includes(positionText(filter)));
   return positionMatches(row.originalLocations, filters.original || '') &&
     positionMatches(row.loadedLocations, filters.loaded || '') &&
-    contains(row.sku + ' ' + row.description, filters.article) &&
+    contains(row.sku + ' ' + row.description + ' ' + (row.barcode||''), filters.article) &&
     numberMatches(row.saleUnit, filters.saleUnit || '') &&
     numberMatches(row.oldPresent ? row.oldQty : null, filters.oldQty || '') &&
     numberMatches(row.wmsPresent ? row.wmsQty : null, filters.wmsQty || '') &&
     numberMatches(row.delta, filters.delta || '') &&
-    (!filters.kind || row.kind === filters.kind) &&
+    (!filters.kind || (filters.kind==='Ubicación distinta'?row.locationMatches===false:row.kind === filters.kind)) &&
     (!filters.status || row.status === filters.status);
 }

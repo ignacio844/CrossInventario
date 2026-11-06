@@ -17,7 +17,7 @@ export async function createStorage(mode){
  if(missing.length){await api.spreadsheets.batchUpdate({spreadsheetId,requestBody:{requests:missing.map(title=>({addSheet:{properties:{title,gridProperties:{rowCount:35000,columnCount:10}}}}))}});info=(await api.spreadsheets.get({spreadsheetId,fields:'sheets.properties'})).data;}
  const ids=Object.fromEntries(info.sheets.map(s=>[s.properties.title,s.properties.sheetId]));
  async function load(){
-   const ends={octosis:'D',products:'C',cross:'B',wms:'G',cases:'B',events:'B',meta:'B'};
+   const ends={octosis:'D',products:'D',cross:'B',wms:'G',cases:'B',events:'B',meta:'B'};
    const res=await api.spreadsheets.values.batchGet({spreadsheetId,ranges:Object.entries(tabs).map(([k,t])=>`'${t}'!A:${ends[k]}`),valueRenderOption:'UNFORMATTED_VALUE'});
    const all=Object.fromEntries(Object.keys(tabs).map((k,i)=>[k,res.data.valueRanges[i].values??[]]));
    const control=all.meta,newFormat=control[0]?.[0]==='v2';

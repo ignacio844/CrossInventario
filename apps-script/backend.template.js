@@ -6,8 +6,26 @@ function json_(v){return ContentService.createTextOutput(JSON.stringify(v)).setM
 function pack_(v){return {packed:Utilities.base64Encode(Utilities.gzip(Utilities.newBlob(JSON.stringify(v),'application/json')).getBytes())};}
 function unpack_(v){if(!v.packed)return v;return JSON.parse(Utilities.ungzip(Utilities.newBlob(Utilities.base64Decode(v.packed),'application/gzip')).getDataAsString('UTF-8'));}
 function fail_(message,status){const e=new Error(message);e.status=status||400;throw e;}
+function sessionKey_(token){return 'session:'+Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,token).map(x=>(x&255).toString(16).padStart(2,'0')).join('');}
+function sessionUser_(token){
+ const key=sessionKey_(token),cache=CacheService.getScriptCache(),saved=cache.get(key)||PropertiesService.getScriptProperties().getProperty(key);
+ if(!saved)fail_('La sesión venció. Volvé a ingresar.',401);
+ const session=JSON.parse(saved);
+ if(!session.email||session.expiresAt<=Date.now())fail_('La sesión venció. Volvé a ingresar.',401);
+ cache.put(key,saved,Math.max(1,Math.min(300,Math.floor((session.expiresAt-Date.now())/1000))));
+ return {email:session.email,role:C3_EMAILS.includes(session.email)?'C3':'C-Administrativo'};
+}
+function createSession_(user){
+ const properties=PropertiesService.getScriptProperties(),now=Date.now();
+ const existing=properties.getProperties();
+ Object.keys(existing).filter(k=>k.indexOf('session:')===0).forEach(k=>{try{if(JSON.parse(existing[k]).expiresAt<=now)properties.deleteProperty(k);}catch(error){properties.deleteProperty(k);}});
+ const token='s1.'+Utilities.getUuid().replace(/-/g,'')+Utilities.getUuid().replace(/-/g,''),expiresAt=now+7*24*60*60*1000;
+ properties.setProperty(sessionKey_(token),JSON.stringify({email:user.email,expiresAt}));
+ return {token,expiresAt,user};
+}
 function user_(token){
  if(typeof token!=='string'||token.length>10000||!token)fail_('Iniciá sesión con Google.',401);
+ if(token.indexOf('s1.')===0)return sessionUser_(token);
  const digest=Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,token).map(x=>(x&255).toString(16).padStart(2,'0')).join('');
  const cache=CacheService.getScriptCache(),cached=cache.get('user:'+digest);let p=cached?JSON.parse(cached):null;
  if(!p){const response=UrlFetchApp.fetch('https://oauth2.googleapis.com/tokeninfo?id_token='+encodeURIComponent(token),{muteHttpExceptions:true});if(response.getResponseCode()!==200)fail_('La sesión venció. Volvé a ingresar.',401);p=JSON.parse(response.getContentText());}
@@ -22,7 +40,7 @@ function revision_(){
  const rev=rows[0]?.[0]==='v2'?Number(rows[0][1]):Number(rows[1]?.[0]||0);cache.put('revision',String(rev),5);return rev;
 }
 function load_(withHistory){
- const keys=Object.keys(TABLES).filter(k=>withHistory||k!=='events'),ends={octosis:'D',products:'C',cross:'B',wms:'G',cases:'B',events:'B',meta:'B'};
+ const keys=Object.keys(TABLES).filter(k=>withHistory||k!=='events'),ends={octosis:'D',products:'D',cross:'B',wms:'G',cases:'B',events:'B',meta:'B'};
  const results=Sheets.Spreadsheets.Values.batchGet(SHEET_ID,{ranges:keys.map(k=>"'"+TABLES[k]+"'!A:"+ends[k]),valueRenderOption:'UNFORMATTED_VALUE'}).valueRanges;
  const all=Object.fromEntries(keys.map((k,i)=>[k,results[i].values||[]])),control=all.meta;
  return {octosis:all.octosis,products:all.products,cross:all.cross,wms:all.wms,cases:Object.fromEntries(all.cases.map(r=>[r[0],JSON.parse(r[1])])),events:withHistory?all.events.map(r=>JSON.parse(r[1])):[],meta:control[0]?.[0]==='v2'?JSON.parse(control.slice(1).map(r=>r[0]||'').join('')):JSON.parse(control[0]?.[0]||'{}'),revision:control[0]?.[0]==='v2'?Number(control[0][1]):Number(control[1]?.[0]||0)};
@@ -48,9 +66,9 @@ function validate_(type,rows,user){
  if(!['wms','cross','products','octosis'].includes(type))fail_('Tipo de archivo inválido.');
  if(type!=='wms'&&user.role!=='C3')fail_('Solo C3 puede reemplazar las referencias.',403);
  if(!Array.isArray(rows)||!rows.length||rows.length>100000)fail_('Cantidad de filas inválida.');
- const sizes={wms:7,cross:2,products:3,octosis:4},seen=new Set();
+ const sizes={wms:7,cross:2,products:4,octosis:4},seen=new Set();
  for(const r of rows){
-  if(!Array.isArray(r)||r.length!==sizes[type])fail_('Estructura de columnas inválida.');
+  if(!Array.isArray(r)||(r.length!==sizes[type]&&!(type==='products'&&r.length===3)))fail_('Estructura de columnas inválida.');
   if(!r[0]||typeof r[0]!=='string'||r[0].length>200)fail_('Código o posición inválidos.');
   if(r.some(v=>typeof v==='object'||typeof v==='string'&&v.length>3000))fail_('Contenido de celda inválido.');
   if(type==='cross'){if(typeof r[1]!=='string'||!r[1])fail_('Correspondencia incompleta.');}
@@ -58,11 +76,13 @@ function validate_(type,rows,user){
  }
  return rows;
 }
-function doGet(){return json_({service:'Control inventario Escobar',status:'ready',message:'Usar la app con sesión Google.'});}
+function doGet(){return json_({service:'Control inventario Escobar',version:2,status:'ready',message:'Usar la app con sesión Google.'});}
 function doPost(e){
  let lock;
  try{
   const input=JSON.parse(e.postData.contents),user=user_(input.token),body=unpack_(input.body||{});
+  if(input.op==='session'){if(input.token.indexOf('s1.')===0)fail_('Ingresá nuevamente con Google para renovar la sesión.',401);return json_(createSession_(user));}
+  if(input.op==='logout'){if(input.token.indexOf('s1.')===0){const key=sessionKey_(input.token);PropertiesService.getScriptProperties().deleteProperty(key);CacheService.getScriptCache().remove(key);}return json_({signedOut:true});}
   if(input.op==='state'&&input.revision!==null&&input.revision!==undefined&&Number(input.revision)===revision_())return json_({unchanged:true,revision:Number(input.revision),user});
   lock=LockService.getScriptLock();if(!lock.tryLock(20000))fail_('Hay otra operación en curso. Intentá nuevamente.',429);
   const writes=['action','import'].includes(input.op),data=load_(writes||input.op==='history');

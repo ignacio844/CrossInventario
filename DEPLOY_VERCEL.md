@@ -51,4 +51,8 @@ Si modificás Apps Script, publicar una nueva versión conservando la URL `/exec
 
 La descarga automática de SGL sigue pendiente. Por ahora se importan Excel manualmente; Actualizar vista consulta la app, no descarga SGL.
 
+La versión actual del backend lee Productos como código, descripción, BULTO y código de barras (columnas A:D). Para actualizar una implementación existente, reemplazar Code.gs, guardar y publicar una nueva versión desde Administrar implementaciones conservando su URL. Después importar el maestro de Productos desde la app para incorporar los códigos de barras.
+
+El inicio Google intercambia su token por una sesión propia de siete días. Apps Script guarda solo el identificador hash, correo y vencimiento en propiedades del proyecto; la app conserva el identificador opaco en el navegador. El botón Salir revoca esa sesión. No hace falta agregar secretos en Vercel ni cambiar los permisos de Google.
+
 Referencias: [Vite en Vercel](https://vercel.com/docs/frameworks/frontend/vite), [aplicaciones web Apps Script](https://developers.google.com/apps-script/guides/web).
