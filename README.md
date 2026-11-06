@@ -8,18 +8,13 @@ Requiere Node 22 o superior. Instalar con `npm install`, compilar con `npm run b
 
 En `DATA_MODE=demo`, el servidor escucha solamente en la computadora local y guarda los cambios en `data/runtime.json`. Permite probar ambos roles; las acciones quedan identificadas como prueba. No usar ese modo para operación real ni exponerlo a internet.
 
-## Conectar Google y trabajo compartido
+## Vercel y Google Sheets
 
-1. Crear un cliente OAuth web en Google Cloud, habilitar Google Sheets API y configurar los orígenes JavaScript del sitio en ese cliente.
-2. Crear una cuenta de servicio y compartir con ella una planilla vacía como editora. Mantener la planilla privada.
-3. Configurar `DATA_MODE=sheets`, `GOOGLE_CLIENT_ID`, `GOOGLE_SHEET_ID` y `GOOGLE_APPLICATION_CREDENTIALS` (ruta de la credencial fuera del proyecto; preferir credenciales administradas en hosting).
-4. Desplegar **una sola instancia persistente del servidor Node**, detrás de HTTPS con un proxy local hacia el puerto configurado. No usar serverless, varias réplicas ni edición manual de las pestañas: este MVP serializa las escrituras dentro de una sola instancia.
-5. Ingresar como C3 e importar Productos, Cross, Octosis y WMS. No se copian automáticamente datos de prueba a Sheets.
-6. Probar con dos cuentas reales una edición concurrente y confirmar el historial antes de iniciar la operación.
+Seguir **DEPLOY_VERCEL.md**. Vercel sirve React y una funcion sin estado conecta con Apps Script. Apps Script verifica Google, asigna roles y coordina escrituras concurrentes en Sheets. La planilla inicial ya fue creada con los cuatro archivos. El despliegue lo realiza el usuario; no requiere cuenta de servicio ni clave privada.
 
-El servidor valida el token de Google y asigna C3 exclusivamente a los seis correos definidos. Cualquier otra cuenta Google verificada entra como C-Administrativo. El resultado del control de C2 lo registra C-Administrativo indicando operario y referencia WMS. No se asigna autoridad por un campo editable del navegador.
+La app consulta cambios cada 8 segundos. La descarga SGL sigue manual. No editar directamente las pestanas de datos durante el operativo.
 
-Sheets utiliza pestañas Octosis, Productos, Cross, WMS, Casos, Historial y Control. Los cambios y su historial se guardan en una misma operación batch. Los clientes consultan la revisión cada 8 segundos; el servidor cachea la comparación y no descarga Sheets por cada navegador. La planilla se carga al iniciar el servidor. La app es la única vía de edición admitida. Si falla una escritura, no se informa éxito ni se cambia el estado en memoria.
+El servidor Node queda como alternativa local o para una sola instancia persistente; no es el backend de Vercel. DEPLOY_GOOGLE.md describe esa alternativa.
 
 ## Uso
 
@@ -49,6 +44,8 @@ El historial es operativo, no inmutable frente a editores de la planilla. Export
 
 `npm test` prueba conciliación, cardinalidades, autorizaciones, conflictos, idempotencia, detección de cambios, aceptación de diferencias y verificación posterior a ajustes. La integración real con Google requiere sus credenciales y una prueba de aceptación antes de operación.
 
-## Publicación
+## Publicar
 
-La configuración `.openai/hosting.json` corresponde a la vista privada de Sites. No cambiarla a pública sin retirar el inventario inicial o decidir expresamente su audiencia. Para producción con Google se debe servir el build mediante el servidor Node, que bloquea el acceso directo al archivo seed en modo Sheets. Sites estático por sí solo no ejecuta este backend.
+Usar `npm run build:vercel` para Vercel: excluye seed.json. vercel.json selecciona ese comando. `npm run build` genera la vista de prueba privada con inventario local; no usar ese comando para un sitio publico.
+
+La vista privada de Sites guarda cambios solo en el navegador. Completar DEPLOY_VERCEL.md para trabajo compartido.

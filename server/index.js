@@ -39,7 +39,7 @@ app.post('/api/import/preview',upload.single('file'),async(req,res,next)=>{try{
 }catch(e){next(e);}});
 app.post('/api/import/commit',async(req,res,next)=>{try{
   await serialized(async()=>{const p=pending.get(req.body.id);if(!p||p.user!==req.user.email||Date.now()-p.at>900000)throw new Error('La vista previa venció. Seleccioná el archivo nuevamente.');if(p.type!=='wms'&&req.user.role!=='C3')throw Object.assign(new Error('Acción exclusiva de C3.'),{status:403});if(state.revision!==p.revision)throw Object.assign(new Error('Los datos cambiaron. Volvé a validar el archivo antes de importarlo.'),{status:409});
-    const now=new Date().toISOString(),id=crypto.randomUUID();const meta={...state.meta,[`${p.type}File`]:p.file,[`${p.type}ImportedAt`]:now};if(p.type==='wms'){meta.importedAt=now;meta.importId=id;meta.wmsCapturedAt=null;}
+    const now=new Date().toISOString(),id=crypto.randomUUID();const meta={...state.meta,[`${p.type}File`]:p.file,[`${p.type}ImportedAt`]:now};if(p.type==='wms'){meta.importedAt=now;meta.importId=id;meta.wmsCapturedAt=null;meta.seenWmsPositions=[...new Set([...(state.meta.seenWmsPositions??[]),...state.wms.map(r=>r[2]),...p.rows.map(r=>r[2])])];}
     const next={...state,[p.type]:p.rows,meta,revision:state.revision+1,events:[...state.events,{id,action:'import',type:p.type,at:now,user:req.user.email,role:req.user.role,file:p.file,rows:p.rows.length,previous:state[p.type].length,warningCount:p.warnings.length}]};await storage.save(next,state);state=next;pending.delete(req.body.id);
   });res.json({...snapshot(),user:req.user});
 }catch(e){next(e);}});
@@ -47,4 +47,4 @@ app.use('/api',(req,res)=>res.status(404).json({error:'Operación no disponible.
 app.get('/seed.json',(req,res,next)=>mode==='sheets'?res.status(404).end():next());
 app.use(express.static(path.join(base,'dist')));app.get('/{*path}',(req,res)=>res.sendFile(path.join(base,'dist/index.html')));
 app.use((err,req,res,next)=>{console.error(err.message);res.status(err.status||400).json({error:err.message||'No se pudo completar la operación.'});});
-const port=Number(process.env.PORT||4173);app.listen(port,'127.0.0.1',()=>console.log(`Control de inventario: http://127.0.0.1:${port} (${mode})`));
+const port=Number(process.env.PORT||4173),host=process.env.HOST||(mode==='sheets'?'0.0.0.0':'127.0.0.1');app.listen(port,host,()=>console.log(`Control de inventario: http://${host}:${port} (${mode})`));

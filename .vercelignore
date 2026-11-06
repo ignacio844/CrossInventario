@@ -1,0 +1,9 @@
+node_modules
+dist
+.git
+.env
+data
+public/seed.json
+.openai
+*.zip
+*.tar.gz
