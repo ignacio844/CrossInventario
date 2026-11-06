@@ -20,6 +20,7 @@ El servidor Node queda como alternativa local o para una sola instancia persiste
 
 - Una posición que aparece en WMS habilita el control; no se espera a que coincidan todos los artículos.
 - Buscar por código, descripción o ubicación. La vista inicial muestra casos pendientes con carga WMS.
+- La tabla muestra la posición original Octosis y las ubicaciones donde el artículo figura cargado en WMS. Los campos debajo de cada encabezado permiten combinar filtros; las cantidades admiten comparaciones como `>0`, `<0` o `=10`. El CSV conserva ambas ubicaciones y los filtros aplicados.
 - Solicitar C2 y registrar su resultado. Los conteos se realizan en WMS; la app documenta el seguimiento.
 - C3 puede aceptar una diferencia con motivo, registrar un ajuste ya realizado en WMS y verificarlo con una descarga posterior. La cantidad objetivo es el total del artículo en el grupo de posiciones.
 - Un nuevo Excel WMS reemplaza la foto vigente. Nunca se suman descargas entre sí. La vista previa muestra cuántas filas se reemplazan.
