@@ -4,10 +4,14 @@ const unique = values => [...new Set(values.filter(Boolean))].sort((a,b) => a.lo
 
 export function tableRow(row) {
   const original = unique(row.oldDetails.map(detail => detail.position));
+  const loadedLocations=unique(row.wmsDetails.map(detail=>detail.position));
+  const loadedPositionDetails=loadedLocations.map(position=>({position,containers:unique(row.wmsDetails.filter(detail=>detail.position===position).map(detail=>String(detail.container??'').trim()))}));
   return {
     ...row,
     originalLocations: original.length ? original : unique(row.crossOriginalLocations||[]),
-    loadedLocations: unique(row.wmsDetails.map(detail => detail.position))
+    loadedLocations,
+    loadedPositionDetails,
+    containers:unique(loadedPositionDetails.flatMap(detail=>detail.containers))
   };
 }
 
@@ -42,7 +46,7 @@ export function columnMatches(row, filters, aisles={}) {
   const contains = (value, filter) => !filter || text(value).includes(text(filter));
   const positionMatches = (values, filter) => !filter || values.some(value => positionText(value).includes(positionText(filter)));
   return positionMatches(row.originalLocations, filters.original || '') &&
-    positionMatches(row.loadedLocations, filters.loaded || '') &&
+    positionMatches([...row.loadedLocations,...(row.containers||[])], filters.loaded || '') &&
     aisleMatches(row.originalLocations,aisles.original) &&
     aisleMatches(row.loadedLocations,aisles.loaded) &&
     contains(row.sku + ' ' + row.description + ' ' + (row.barcode||''), filters.article) &&
@@ -81,7 +85,7 @@ export function sortRows(rows, sort) {
 }
 export function columnOptions(rows,key) {
   const format=value=>numericColumns.has(key)?String(value).replace('.',','):String(value);
-  return [...new Set(rows.flatMap(row=>columnValues(row,key)).map(format))]
+  return [...new Set(rows.flatMap(row=>[...columnValues(row,key),...(key==='loaded'?row.containers||[]:[])]).map(format))]
     .sort((a,b)=>numericColumns.has(key)?Number(a.replace(',','.'))-Number(b.replace(',','.')):collator.compare(a,b));
 }
 export function aisleOptions(rows,key) {

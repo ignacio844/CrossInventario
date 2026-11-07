@@ -82,3 +82,12 @@ test('un caso con varias posiciones aparece una vez y conserva sus cantidades co
   assert.deepEqual(filtered[0].originalLocations,['2B / 1 1','2C / 2 1']);
   assert.deepEqual(aisleOptions([row,row],'original'),['2B','2C']);
 });
+test('contenedores se conservan como texto y quedan asociados a su posición WMS real',()=>{
+  const row=tableRow({...base,wmsDetails:[{position:'2B 001 01',container:'00123'},{position:'2B 001 01',container:'00123'},{position:'2B 001 01',container:'00124'},{position:'2C 002 01',container:'2Z-CONT'},{position:'2C 002 01',container:''}]});
+  assert.deepEqual(row.loadedPositionDetails,[{position:'2B 001 01',containers:['00123','00124']},{position:'2C 002 01',containers:['2Z-CONT']}]);
+  assert.deepEqual(new Set(row.containers),new Set(['00123','00124','2Z-CONT']));assert.equal(row.wmsQty,base.wmsQty);
+  assert.deepEqual(aisleOptions([row],'loaded'),['2B','2C']);
+  assert.equal(columnMatches(row,{loaded:'00123'}),true);
+  assert.deepEqual(suggestValues(columnOptions([row],'loaded'),'00123','loaded'),['00123']);
+  assert.deepEqual(tableRow({...base,wmsDetails:[]}).loadedPositionDetails,[]);
+});

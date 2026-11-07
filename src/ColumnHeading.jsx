@@ -26,7 +26,7 @@ function FilterMenu({label,column,rows,value,onFilter,sort,onSort,onClose,numeri
   }
   const content=<>
     <label className="filter-content-label">Filtrar por contenido
-      <input autoFocus={!positionColumn} role="combobox" aria-label={'Filtrar '+label} autoComplete="off" aria-autocomplete="list" aria-expanded={suggestions.length>0} aria-controls={listId} aria-activedescendant={highlight>=0?listId+'-'+highlight:undefined} placeholder={numeric?'Ej. =10, >0':'Escribí para buscar…'} value={value} onChange={event=>onFilter(event.target.value)} onKeyDown={keyDown}/>
+      <input autoFocus={!positionColumn} role="combobox" aria-label={'Filtrar '+label} autoComplete="off" aria-autocomplete="list" aria-expanded={suggestions.length>0} aria-controls={listId} aria-activedescendant={highlight>=0?listId+'-'+highlight:undefined} placeholder={numeric?'Ej. =10, >0':column==='loaded'?'Posición o contenedor…':'Escribí para buscar…'} value={value} onChange={event=>onFilter(event.target.value)} onKeyDown={keyDown}/>
     </label>
     {numeric&&<small className="filter-hint">Cantidad exacta o comparación: =10, &gt;0, &lt;=100.</small>}
     <small className="suggestion-label">Sugerencias</small>
@@ -39,7 +39,7 @@ function FilterMenu({label,column,rows,value,onFilter,sort,onSort,onClose,numeri
     <strong>{label}</strong>
     <div className="sort-options">{[['asc',numeric?'De menor a mayor':'De A a Z','↑'],['desc',numeric?'De mayor a menor':'De Z a A','↓']].map(([direction,title,arrow])=><button key={direction} aria-pressed={sort?.key===column&&sort.direction===direction} onClick={()=>{onSort({key:column,direction});onClose();}}><span aria-hidden="true">{arrow}</span>{title}</button>)}</div>
     {positionColumn&&<AislePicker rows={rows} column={column} selected={selectedAisles} onChange={onAisles}/>}
-    {positionColumn?<details className="position-content-filter" open={!!value}><summary>Filtrar posición por contenido{value?' · '+value:''}</summary>{content}</details>:content}
+    {positionColumn?<details className="position-content-filter" open={!!value}><summary>{column==='loaded'?'Filtrar posición o contenedor':'Filtrar posición por contenido'}{value?' · '+value:''}</summary>{content}</details>:content}
     <button className="remove-column-filter" onClick={()=>{onFilter('');if(positionColumn)onAisles([]);onClose();}}>Quitar filtro</button>
     {sort?.key===column&&<button className="remove-column-sort" onClick={()=>{onSort(null);onClose();}}>Quitar orden</button>}
   </div>;
