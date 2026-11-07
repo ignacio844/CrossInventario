@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {tableRow,numberMatches,columnMatches,sortRows,columnOptions,suggestValues} from '../src/table.js';
+import {tableRow,numberMatches,columnMatches,sortRows,columnOptions,suggestValues,positionAisle,aisleOptions} from '../src/table.js';
 
 const base = {sku:'SKU',description:'Lámpara',oldDetails:[{position:'1A / 1 1'},{position:'1A / 1 1'}],oldPositions:['1A11','1A21'],wmsDetails:[{position:'1A 001 01'},{position:'1A 001 01'}],positions:['1A 001 01','1A 002 01'],oldPresent:true,wmsPresent:true,oldQty:2864,wmsQty:2863,delta:-1,saleUnit:1,kind:'Cantidad distinta',status:'Pendiente'};
 
@@ -50,4 +50,34 @@ test('sugerencias numéricas admiten cero, decimales y comparaciones; estado per
   assert.deepEqual(columnOptions(rows,'delta'),['0','1,5','10']);
   assert.deepEqual(suggestValues(columnOptions(rows,'delta'),'>1','delta'),['1,5','10']);
   assert.equal(columnMatches(tableRow(base),{status:'pend',kind:'distinta'}),true);
+});
+
+test('pasillos normalizan separadores sin confundir 2B con 12B ni 2BIS',()=>{
+  for(const position of ['2B / 15 3',' 2b 015 03 ','2B01503','2 B / 15 3'])assert.equal(positionAisle(position),'2B');
+  assert.equal(positionAisle('12B / 1 2'),'12B');
+  assert.equal(positionAisle('2BIS 001 01'),'2BIS');
+  assert.equal(positionAisle('PUNTR 012 01'),'PUNTR');
+  assert.equal(positionAisle(null),'');assert.equal(positionAisle('12345'),'');
+});
+test('selección múltiple de pasillos usa OR por columna y AND con los demás filtros',()=>{
+  const rows=['2B','2C','2D','12B','2BIS'].map(aisle=>tableRow({...base,id:aisle,oldDetails:[{position:aisle+' / 1 1'}]}));
+  const selected=rows.filter(row=>columnMatches(row,{}, {original:['2B','2C']}));
+  assert.deepEqual(selected.map(row=>row.id),['2B','2C']);
+  assert.equal(columnMatches(rows[0],{article:'otro'}, {original:['2B','2C']}),false);
+  assert.equal(columnMatches(rows[0],{delta:'>0'}, {original:['2B','2C']}),false);
+  assert.ok(rows.every(row=>columnMatches(row,{}, {original:[]})));
+});
+test('Octosis y WMS filtran por sus propios pasillos y no muestran posiciones WMS previstas como cargadas',()=>{
+  const row=tableRow({...base,oldDetails:[{position:'2B / 1 1'}],wmsDetails:[{position:'2C 001 01'}],positions:['2B 001 01','2C 001 01']});
+  assert.equal(columnMatches(row,{}, {original:['2B'],loaded:['2C']}),true);
+  assert.equal(columnMatches(row,{}, {loaded:['2B']}),false);
+  assert.equal(columnMatches(tableRow({...base,wmsDetails:[]}),{}, {loaded:['2B']}),false);
+  assert.deepEqual(aisleOptions([row],'original'),['2B']);assert.deepEqual(aisleOptions([row],'loaded'),['2C']);
+});
+test('un caso con varias posiciones aparece una vez y conserva sus cantidades completas',()=>{
+  const row=tableRow({...base,oldDetails:[{position:'2B / 1 1'},{position:'2C / 2 1'},{position:'2B / 1 1'}]});
+  const filtered=[row].filter(value=>columnMatches(value,{}, {original:['2B','2C']}));
+  assert.equal(filtered.length,1);assert.equal(filtered[0].oldQty,base.oldQty);
+  assert.deepEqual(filtered[0].originalLocations,['2B / 1 1','2C / 2 1']);
+  assert.deepEqual(aisleOptions([row,row],'original'),['2B','2C']);
 });

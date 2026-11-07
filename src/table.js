@@ -31,11 +31,20 @@ export function numberMatches(value, filter) {
   }
 }
 
-export function columnMatches(row, filters) {
+export function positionAisle(position) {
+  const normalized=String(position??'').normalize('NFKC').trim().toUpperCase().replace(/\s+/g,'');
+  return normalized.match(/^(?:\d+[A-Z]+|[A-Z]+)/)?.[0]||'';
+}
+export function aisleMatches(positions, selected=[]) {
+  return !selected.length||positions.some(position=>selected.includes(positionAisle(position)));
+}
+export function columnMatches(row, filters, aisles={}) {
   const contains = (value, filter) => !filter || text(value).includes(text(filter));
   const positionMatches = (values, filter) => !filter || values.some(value => positionText(value).includes(positionText(filter)));
   return positionMatches(row.originalLocations, filters.original || '') &&
     positionMatches(row.loadedLocations, filters.loaded || '') &&
+    aisleMatches(row.originalLocations,aisles.original) &&
+    aisleMatches(row.loadedLocations,aisles.loaded) &&
     contains(row.sku + ' ' + row.description + ' ' + (row.barcode||''), filters.article) &&
     numberMatches(row.saleUnit, filters.saleUnit || '') &&
     numberMatches(row.oldPresent ? row.oldQty : null, filters.oldQty || '') &&
@@ -74,6 +83,10 @@ export function columnOptions(rows,key) {
   const format=value=>numericColumns.has(key)?String(value).replace('.',','):String(value);
   return [...new Set(rows.flatMap(row=>columnValues(row,key)).map(format))]
     .sort((a,b)=>numericColumns.has(key)?Number(a.replace(',','.'))-Number(b.replace(',','.')):collator.compare(a,b));
+}
+export function aisleOptions(rows,key) {
+  if(!['original','loaded'].includes(key))return [];
+  return unique(rows.flatMap(row=>columnValues(row,key)).map(positionAisle));
 }
 export function suggestValues(options,query,key,limit=12) {
   const search=text(query);
