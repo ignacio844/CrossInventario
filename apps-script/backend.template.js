@@ -76,17 +76,20 @@ function validate_(type,rows,user){
  }
  return rows;
 }
-function doGet(){return json_({service:'Control inventario Escobar',version:2,status:'ready',message:'Usar la app con sesión Google.'});}
+function doGet(){return json_({service:'Control inventario Escobar',version:3,status:'ready',message:'Usar la app con sesión Google.'});}
 function doPost(e){
  let lock;
  try{
-  const input=JSON.parse(e.postData.contents),user=user_(input.token),body=unpack_(input.body||{});
+  const input=JSON.parse(e.postData.contents);
+  if(typeof input.op==='string'&&input.op.indexOf('worker-')===0)return json_(syncWorker_(input));
+  const user=user_(input.token),body=unpack_(input.body||{});
+  if(['wms-pair','wms-request'].includes(input.op))return json_(syncUser_(input.op,user));
   if(input.op==='session'){if(input.token.indexOf('s1.')===0)fail_('Ingresá nuevamente con Google para renovar la sesión.',401);return json_(createSession_(user));}
   if(input.op==='logout'){if(input.token.indexOf('s1.')===0){const key=sessionKey_(input.token);PropertiesService.getScriptProperties().deleteProperty(key);CacheService.getScriptCache().remove(key);}return json_({signedOut:true});}
-  if(input.op==='state'&&input.revision!==null&&input.revision!==undefined&&Number(input.revision)===revision_())return json_({unchanged:true,revision:Number(input.revision),user});
+  if(input.op==='state'&&input.revision!==null&&input.revision!==undefined&&Number(input.revision)===revision_())return json_({unchanged:true,revision:Number(input.revision),user,wmsSync:syncPublic_()});
   lock=LockService.getScriptLock();if(!lock.tryLock(20000))fail_('Hay otra operación en curso. Intentá nuevamente.',429);
   const writes=['action','import'].includes(input.op),data=load_(writes||input.op==='history');
-  if(input.op==='state')return json_(pack_({rawState:data,user}));
+  if(input.op==='state')return json_(pack_({rawState:data,user,wmsSync:syncPublic_()}));
   if(input.op==='history')return json_(pack_({events:data.events.filter(x=>!input.id||x.caseId===input.id).reverse()}));
   if(input.op==='preview'){validate_(body.type,body.rows,user);return json_({id:Utilities.getUuid(),rows:body.rows.length,previous:data[body.type].length,warnings:[],file:String(body.file||'archivo.xlsx').slice(0,255),revision:data.revision});}
   let next;

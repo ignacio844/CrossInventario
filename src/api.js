@@ -30,7 +30,9 @@ export async function init(){
 
 }
 
-async function request(path,body,method,credential){const headers={'x-demo-role':role};if(credential||token)headers.Authorization='Bearer '+(credential||token);if(body&&!(body instanceof FormData))headers['Content-Type']='application/json';const r=await fetch('/api'+path,{method:method||(body?'POST':'GET'),headers,body:body instanceof FormData?body:body?JSON.stringify(body):undefined});let result=await r.json();if(!r.ok){if(r.status===401&&!credential){forgetSession();if(typeof window!=='undefined')window.dispatchEvent(new Event('inventory-session-expired'));}throw new Error(result.error||'Error de conexión.');}if(result.packed)result=await unpack(result.packed);return result.rawState?{...reconcile(result.rawState),user:result.user}:result;}
+async function request(path,body,method,credential){const headers={'x-demo-role':role};if(credential||token)headers.Authorization='Bearer '+(credential||token);if(body&&!(body instanceof FormData))headers['Content-Type']='application/json';const r=await fetch('/api'+path,{method:method||(body?'POST':'GET'),headers,body:body instanceof FormData?body:body?JSON.stringify(body):undefined});let result=await r.json();if(!r.ok){if(r.status===401&&!credential){forgetSession();if(typeof window!=='undefined')window.dispatchEvent(new Event('inventory-session-expired'));}throw new Error(result.error||'Error de conexión.');}if(result.packed)result=await unpack(result.packed);return result.rawState?{...reconcile(result.rawState),user:result.user,wmsSync:result.wmsSync}:result;}
+export async function requestWms(){return request('/wms/request',{});}
+export async function pairWms(){return request('/wms/pair',{});}
 
 async function pack(value){const stream=new Blob([JSON.stringify(value)]).stream().pipeThrough(new CompressionStream('gzip'));const bytes=new Uint8Array(await new Response(stream).arrayBuffer());let text='';for(let i=0;i<bytes.length;i+=32768)text+=String.fromCharCode(...bytes.subarray(i,i+32768));return {packed:btoa(text)};}
 

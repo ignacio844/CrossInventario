@@ -12,7 +12,7 @@ En `DATA_MODE=demo`, el servidor escucha solamente en la computadora local y gua
 
 Seguir **DEPLOY_VERCEL.md**. Vercel sirve React y una funcion sin estado conecta con Apps Script. Apps Script verifica Google, asigna roles y coordina escrituras concurrentes en Sheets. La planilla inicial ya fue creada con los cuatro archivos. El despliegue lo realiza el usuario; no requiere cuenta de servicio ni clave privada.
 
-La app consulta cambios cada 8 segundos. La descarga SGL sigue manual. No editar directamente las pestanas de datos durante el operativo.
+La app consulta cambios cada 8 segundos. El descargador local consulta SGL de producción cada cinco minutos y a solicitud del botón Descargar stock WMS. Ver **WMS_PRODUCCION.md** para conectar el equipo. No editar directamente las pestañas de datos durante el operativo.
 
 El servidor Node queda como alternativa local o para una sola instancia persistente; no es el backend de Vercel. DEPLOY_GOOGLE.md describe esa alternativa.
 
@@ -28,7 +28,7 @@ El servidor Node queda como alternativa local o para una sola instancia persiste
 - C3 puede aceptar una diferencia con motivo, registrar un ajuste ya realizado en WMS y verificarlo con una descarga posterior. La cantidad objetivo es el total del artículo en el grupo de posiciones.
 - Un nuevo Excel WMS reemplaza la foto vigente. Nunca se suman descargas entre sí. La vista previa muestra cuántas filas se reemplazan.
 - Si cambia la cantidad, distribución, referencia o unidad de un caso revisado, se señala para revisión. El historial anterior permanece.
-- El botón Actualizar vista consulta los datos compartidos. La conexión automática cada 5 minutos con SGL fue pospuesta por el usuario: por ahora hay que descargar e importar Excel manualmente.
+- Actualizar vista consulta los datos compartidos. Descargar stock WMS solicita una exportación nueva de producción a la computadora conectada; el mismo proceso atiende el ciclo automático de cinco minutos. Varias solicitudes concurrentes comparten la descarga activa.
 
 ## Reglas de comparación y límites
 

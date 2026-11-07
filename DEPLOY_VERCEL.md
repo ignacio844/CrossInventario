@@ -49,7 +49,7 @@ Apps Script bloquea escrituras concurrentes y guarda cada cambio junto con su hi
 
 Si modificás Apps Script, publicar una nueva versión conservando la URL `/exec`. Ante un timeout, actualizar la vista antes de reintentar: la app no anuncia éxito sin respuesta confirmada. La latencia y capacidad con diez sesiones deben verificarse en el despliegue real.
 
-La descarga automática de SGL sigue pendiente. Por ahora se importan Excel manualmente; Actualizar vista consulta la app, no descarga SGL.
+La descarga automática de SGL se ejecuta en el equipo Windows conectado, cada cinco minutos y por el botón Descargar stock WMS. Seguir WMS_PRODUCCION.md. Actualizar vista consulta la app. La importación manual de Excel sigue disponible.
 
 La versión actual del backend lee Productos como código, descripción, BULTO y código de barras (columnas A:D). Para actualizar una implementación existente, reemplazar Code.gs, guardar y publicar una nueva versión desde Administrar implementaciones conservando su URL. Después importar el maestro de Productos desde la app para incorporar los códigos de barras.
 

@@ -7,3 +7,6 @@ public/seed.json
 .openai
 *.zip
 *.tar.gz
+.env.wms
+.wms
+worker

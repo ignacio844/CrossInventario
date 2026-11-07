@@ -4,3 +4,6 @@ dist/
 data/
 *.log
 .sites-local/
+.env.wms
+.wms/
+__pycache__/
