@@ -8,7 +8,7 @@
 
 El descargador se ejecuta en esta computadora Windows y se conecta hacia Apps Script por HTTPS. Vercel no necesita acceder a la computadora ni publicar un puerto local. El botón de la app y el ciclo de cinco minutos utilizan una misma cola. Si coinciden varias solicitudes, se aprovecha la descarga activa.
 
-El equipo inicia sesión en SGL con la cuenta local, selecciona CD ESCOBAR (valor 1) y exporta el icono Excel del bloque Stocks del Tablero Comando. Esa exportación es TC_Stock.xlsx y conserva artículo, unidades, posición, profundidad, contenedor y bultos. No modifica inventarios ni ejecuta ajustes en SGL.
+El equipo inicia sesión en SGL con la cuenta local, selecciona CD ESCOBAR (valor 1), confirma el depósito en la sesión y abre el Tablero Comando aunque SGL lo deje en Inicio. Después exporta el icono Excel del bloque Stocks. Esa exportación es TC_Stock.xlsx y conserva artículo, unidades, posición, profundidad, contenedor y bultos. No modifica inventarios ni ejecuta ajustes en SGL.
 
 Cada descarga válida reemplaza la foto WMS y registra archivo, fecha y solicitante en el historial. Las observaciones y los estados de control se conservan. Si hubo una importación manual de WMS después de iniciar la descarga, el servidor rechaza la foto anterior y permite solicitar otra. Una caída de conexión conserva el último stock válido.
 

@@ -30,5 +30,21 @@ class WorkerTests(unittest.TestCase):
         with patch.object(agent,'download_stock',side_effect=RuntimeError('Sin conexión')):
             agent.run_job(backend,{},dict(id='job'))
         self.assertEqual(calls,['worker-error'])
+    def test_authenticated_home_opens_production_dashboard_explicitly(self):
+        navigations=[]
+        page=SimpleNamespace(url=agent.PRODUCTION_URL,get_by_text=lambda pattern:SimpleNamespace(first=SimpleNamespace(wait_for=lambda **kwargs:None)))
+        def navigate(url,**kwargs):
+            navigations.append(url);page.url=url
+        page.goto=navigate
+        agent.open_stock_dashboard(page,'usuario+prueba')
+        self.assertEqual(navigations,[agent.PRODUCTION_BASE+'/tablerocomando.aspx?usuario%2Bprueba,1'])
+        agent.open_stock_dashboard(page,'usuario+prueba')
+        self.assertEqual(len(navigations),1)
+    def test_dashboard_is_not_opened_without_confirmation_of_escobar(self):
+        navigations=[]
+        def denied(**kwargs):raise RuntimeError('No se confirmó CD Escobar')
+        page=SimpleNamespace(url=agent.PRODUCTION_URL,get_by_text=lambda pattern:SimpleNamespace(first=SimpleNamespace(wait_for=denied)),goto=lambda *args,**kwargs:navigations.append(args))
+        with self.assertRaises(RuntimeError):agent.open_stock_dashboard(page,'usuario')
+        self.assertEqual(navigations,[])
 
 if __name__=='__main__':unittest.main()

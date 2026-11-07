@@ -17,7 +17,7 @@ import unicodedata
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import urlparse,quote
 
 PROJECT = Path(__file__).resolve().parents[1]
 RUNTIME = PROJECT / '.wms'
@@ -91,6 +91,13 @@ def parse_stock(path):
     finally:
         workbook.close()
 
+def open_stock_dashboard(page,username):
+    production_only(page.url)
+    page.get_by_text(re.compile(r'CD:\s*CD ESCOBAR',re.I)).first.wait_for(state='visible',timeout=30000)
+    if not re.search(r'tablerocomando\.aspx',page.url,re.I):
+        page.goto(PRODUCTION_BASE+'/tablerocomando.aspx?'+quote(username,safe='')+',1',wait_until='domcontentloaded')
+    production_only(page.url)
+
 def download_stock(config,progress,headed=False):
     from playwright.sync_api import sync_playwright
     configured = config.get('WMS_BASE_URL',PRODUCTION_BASE).rstrip('/')
@@ -113,8 +120,7 @@ def download_stock(config,progress,headed=False):
             if 'ESCOBAR' not in normalize(label):
                 raise ValueError('No se pudo identificar CD ESCOBAR en la selección de sede.')
             selector.select_option('1');page.locator('[name="BUTTON4"]').click()
-            page.wait_for_url(re.compile(r'tablerocomando\.aspx',re.I),timeout=30000)
-            production_only(page.url)
+            open_stock_dashboard(page,config['WMS_USERNAME'])
             if 'CD ESCOBAR' not in page.locator('body').inner_text():
                 raise ValueError('La sesión no confirmó CD ESCOBAR.')
             depot=page.locator('select[name="vSUCURSAL"]')
