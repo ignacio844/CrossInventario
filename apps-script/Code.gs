@@ -29,11 +29,14 @@ function reconcile(data) {
     const saved=data.cases[r.id];r.review=saved??{};r.changed=!!saved&&saved.fingerprint!==r.fingerprint;
     r.status=r.changed?'Revisar cambio':saved?.status??(r.active?'Pendiente':'Sin carga WMS');
     if(saved?.status==='Ajustado en WMS'&&r.changed)r.status='Verificar ajuste';
+    r.autoResolved=r.kind==='Coincide'&&r.locationMatches===true;
+    if(r.autoResolved)r.status='Resuelto automáticamente';
     return r;
   });
   rows.sort((a,b)=>Number(b.active)-Number(a.active)||a.positions[0].localeCompare(b.positions[0],undefined,{numeric:true})||a.sku.localeCompare(b.sku));
   return {rows,stats:{activeGroups:active.size,records:rows.filter(r=>r.active).length,missingUnits:rows.filter(r=>r.saleUnit==null).length,unmapped:rows.filter(r=>!r.mapped).length,ambiguousOld:[...oldLinks.values()].filter(s=>s.size>1).length},revision:data.revision,meta:data.meta};
 }
+const isResolved = row => ['Aceptado C3','Verificado C3','Resuelto automáticamente'].includes(row.status);
 function requiresReason(row,action){return !(action==='accept'&&row.kind==='Coincide'&&row.locationMatches===true);}
 function applyAction(data,{id,action,reason,quantity,expectedRevision,requestId},user,now=new Date().toISOString()){
   if(!user?.email)throw new Error('Iniciá sesión para guardar.');

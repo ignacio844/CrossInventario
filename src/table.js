@@ -41,6 +41,45 @@ export function columnMatches(row, filters) {
     numberMatches(row.oldPresent ? row.oldQty : null, filters.oldQty || '') &&
     numberMatches(row.wmsPresent ? row.wmsQty : null, filters.wmsQty || '') &&
     numberMatches(row.delta, filters.delta || '') &&
-    (!filters.kind || (filters.kind==='Ubicación distinta'?row.locationMatches===false:row.kind === filters.kind)) &&
-    (!filters.status || row.status === filters.status);
+    contains(row.kind+(row.locationMatches===false?' Ubicación distinta':''), filters.kind) &&
+    contains(row.status, filters.status);
+}
+
+export const numericColumns = new Set(['saleUnit','oldQty','wmsQty','delta']);
+export function columnValues(row, key) {
+  switch(key) {
+    case 'original': return row.originalLocations;
+    case 'loaded': return row.loadedLocations;
+    case 'article': return [row.sku,row.description,row.barcode].filter(Boolean);
+    case 'oldQty': return row.oldPresent ? [row.oldQty] : [];
+    case 'wmsQty': return row.wmsPresent ? [row.wmsQty] : [];
+    case 'kind': return [row.kind,...(row.locationMatches===false?['Ubicación distinta']:[])];
+    default: return row[key] == null ? [] : [row[key]];
+  }
+}
+const collator = new Intl.Collator('es',{numeric:true,sensitivity:'base'});
+export function sortRows(rows, sort) {
+  if(!sort?.key)return rows;
+  const direction=sort.direction==='desc'?-1:1;
+  const value=row=>columnValues(row,sort.key)[0];
+  return [...rows].sort((a,b)=>{
+    const left=value(a),right=value(b);
+    const emptyLeft=left===undefined||left==='',emptyRight=right===undefined||right==='';
+    if(emptyLeft||emptyRight)return Number(emptyLeft)-Number(emptyRight);
+    const order=numericColumns.has(sort.key)?left-right:collator.compare(String(left),String(right));
+    return direction*order||collator.compare(a.sku,b.sku)||collator.compare(a.id,b.id);
+  });
+}
+export function columnOptions(rows,key) {
+  const format=value=>numericColumns.has(key)?String(value).replace('.',','):String(value);
+  return [...new Set(rows.flatMap(row=>columnValues(row,key)).map(format))]
+    .sort((a,b)=>numericColumns.has(key)?Number(a.replace(',','.'))-Number(b.replace(',','.')):collator.compare(a,b));
+}
+export function suggestValues(options,query,key,limit=12) {
+  const search=text(query);
+  return options.filter(value=>{
+    if(!search)return true;
+    if(numericColumns.has(key)&&/^[<>=!]/.test(search))return numberMatches(Number(value.replace(',','.')),query);
+    return ['original','loaded'].includes(key)?positionText(value).includes(positionText(query)):text(value).includes(search);
+  }).slice(0,limit);
 }

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {tableRow,numberMatches,columnMatches} from '../src/table.js';
+import {tableRow,numberMatches,columnMatches,sortRows,columnOptions,suggestValues} from '../src/table.js';
 
 const base = {sku:'SKU',description:'Lámpara',oldDetails:[{position:'1A / 1 1'},{position:'1A / 1 1'}],oldPositions:['1A11','1A21'],wmsDetails:[{position:'1A 001 01'},{position:'1A 001 01'}],positions:['1A 001 01','1A 002 01'],oldPresent:true,wmsPresent:true,oldQty:2864,wmsQty:2863,delta:-1,saleUnit:1,kind:'Cantidad distinta',status:'Pendiente'};
 
@@ -25,4 +25,29 @@ test('filtros numéricos admiten igualdad, comparaciones y formato local',()=>{
   assert.equal(numberMatches(0,'!=0'),false);
   assert.equal(numberMatches(null,'0'),false);
   assert.equal(numberMatches(10,'abc'),false);
+});
+
+test('orden numérico global admite negativos, ambos sentidos y faltantes al final',()=>{
+  const rows=Array.from({length:70},(_,i)=>({...tableRow(base),id:String(i),sku:'SKU'+i,wmsQty:i-20}));
+  rows.push({...rows[0],id:'missing',wmsPresent:false});
+  const ascending=sortRows(rows,{key:'wmsQty',direction:'asc'}),descending=sortRows(rows,{key:'wmsQty',direction:'desc'});
+  assert.equal(ascending[0].wmsQty,-20);assert.equal(descending[0].wmsQty,49);
+  assert.equal(ascending.at(-1).id,'missing');assert.equal(descending.at(-1).id,'missing');
+  assert.equal(rows[0].id,'0');
+});
+test('orden de texto usa números naturales y las sugerencias conservan códigos de barras',()=>{
+  const rows=['SKU10','SKU2'].map((sku,i)=>({...tableRow(base),id:sku,sku,barcode:i?'001234567890':'009999'}));
+  assert.deepEqual(sortRows(rows,{key:'article',direction:'asc'}).map(row=>row.sku),['SKU2','SKU10']);
+  assert.deepEqual(sortRows(rows,{key:'article',direction:'desc'}).map(row=>row.sku),['SKU10','SKU2']);
+  const options=columnOptions(rows,'article');
+  assert.deepEqual(suggestValues(options,'lampara','article'),['Lámpara']);
+  assert.deepEqual(suggestValues(options,'00123','article'),['001234567890']);
+  assert.deepEqual(suggestValues(columnOptions(rows,'original'),'1A11','original'),['1A / 1 1']);
+  assert.ok(suggestValues(Array.from({length:100},(_,i)=>'SKU'+i),'SKU','article').length<=12);
+});
+test('sugerencias numéricas admiten cero, decimales y comparaciones; estado permite contenido parcial',()=>{
+  const rows=[0,1.5,10].map(delta=>({...tableRow(base),delta}));
+  assert.deepEqual(columnOptions(rows,'delta'),['0','1,5','10']);
+  assert.deepEqual(suggestValues(columnOptions(rows,'delta'),'>1','delta'),['1,5','10']);
+  assert.equal(columnMatches(tableRow(base),{status:'pend',kind:'distinta'}),true);
 });
