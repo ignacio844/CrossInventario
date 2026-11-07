@@ -9,7 +9,8 @@ test('tabla conserva posición Octosis original y muestra solo posiciones WMS de
   assert.deepEqual(row.originalLocations,['1A / 1 1']);
   assert.deepEqual(row.loadedLocations,['1A 001 01']);
   assert.deepEqual(tableRow({...base,wmsDetails:[],wmsPresent:false}).loadedLocations,[]);
-  assert.deepEqual(tableRow({...base,oldDetails:[]}).originalLocations,['1A11','1A21']);
+  assert.deepEqual(tableRow({...base,oldDetails:[]}).originalLocations,[]);
+  assert.deepEqual(tableRow({...base,oldDetails:[],crossOriginalLocations:['1A / 1 1']}).originalLocations,['1A / 1 1']);
 });
 test('filtros por columna se combinan y encuentran posiciones originales con y sin separadores',()=>{
   const row=tableRow(base);

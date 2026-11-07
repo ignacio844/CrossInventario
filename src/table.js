@@ -6,7 +6,7 @@ export function tableRow(row) {
   const original = unique(row.oldDetails.map(detail => detail.position));
   return {
     ...row,
-    originalLocations: original.length ? original : unique(row.oldPositions),
+    originalLocations: original.length ? original : unique(row.crossOriginalLocations||[]),
     loadedLocations: unique(row.wmsDetails.map(detail => detail.position))
   };
 }

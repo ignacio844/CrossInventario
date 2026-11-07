@@ -2,20 +2,30 @@
 const C3_EMAILS = ['amilano@grupo-aftermarket.com','blas@grupo-aftermarket.com','ignacio@grupo-aftermarket.com','etelias@grupo-aftermarket.com','jpajon@grupo-aftermarket.com','mcrespo@tecnologisticaconsultores.com'];
 const DEPOSITS = ['DISTRIMAR B','DISTRIMAR N','ALEMAR B','JUNIMAR B'];
 const octKey = value => String(value??'').toUpperCase().replace(/\s+/g,'');
+const octPositionKey = value => String(value??'').normalize('NFKC').trim().toUpperCase().replace(/\s+/g,' ').replace(/\s*\/\s*/g,'/');
 const wmsKey = value => String(value??'').trim().toUpperCase().replace(/\//g,' ').replace(/\s+/g,' ');
 function fingerprint(value) { let hash=2166136261; for(const c of JSON.stringify(value)){ hash ^= c.charCodeAt(0); hash=Math.imul(hash,16777619); } return (hash>>>0).toString(36); }
 function reconcile(data) {
   const parent=new Map();
   function root(x){ if(!parent.has(x))parent.set(x,x); if(parent.get(x)!==x)parent.set(x,root(parent.get(x))); return parent.get(x); }
   function union(a,b){a=root(a);b=root(b);if(a!==b)parent.set(a<b?b:a,a<b?a:b);}
-  const oldLinks=new Map();
-  for(const [w,o] of data.cross){const wk=wmsKey(w),ok=octKey(o); if(!wk||!ok)continue;union('w:'+wk,'o:'+ok);if(!oldLinks.has(ok))oldLinks.set(ok,new Set());oldLinks.get(ok).add(wk);}
+  const links=data.cross.map(([w,o])=>({wk:wmsKey(w),ok:octPositionKey(o),label:String(o??'').trim()})).filter(link=>link.wk&&link.ok);
+  const forms=new Map();
+  for(const link of links){const compact=octKey(link.ok);if(!forms.has(compact))forms.set(compact,new Set());forms.get(compact).add(link.ok);}
+  const oldLinks=new Map(),oldNodes=new Map(),reverseLinks=new Map();
+  for(const {wk,ok,label} of links){
+    // Keep existing case IDs for unambiguous cross entries; joins use the spaced key.
+    const node='o:'+(forms.get(octKey(ok)).size===1?octKey(ok):'exact:'+ok);
+    oldNodes.set(ok,node);union('w:'+wk,node);
+    if(!oldLinks.has(ok))oldLinks.set(ok,new Set());oldLinks.get(ok).add(wk);
+    if(!reverseLinks.has(wk))reverseLinks.set(wk,new Map());reverseLinks.get(wk).set(ok,label);
+  }
   const groups=new Map();
   for(const node of parent.keys()){const id=root(node);if(!groups.has(id))groups.set(id,{old:[],positions:[]});groups.get(id)[node.startsWith('o:')?'old':'positions'].push(node.slice(2));}
   for(const g of groups.values()){g.old.sort();g.positions.sort();}
   const catalog=new Map(data.products.map(p=>[p[0],p]));const map=new Map();
   const make=(group,sku)=>{const id=JSON.stringify([group,sku]);if(!map.has(id))map.set(id,{id,group,sku,description:catalog.get(sku)?.[1]||'',saleUnit:catalog.get(sku)?.[2]??null,barcode:String(catalog.get(sku)?.[3]??''),oldQty:0,wmsQty:0,oldPresent:false,wmsPresent:false,oldDetails:[],wmsDetails:[],positions:groups.get(group)?.positions??[group.slice(2)],oldPositions:groups.get(group)?.old??[],mapped:groups.has(group)});return map.get(id);};
-  for(const [sku,q,pos,dep] of data.octosis){if(!DEPOSITS.includes(dep))continue; const ok=octKey(pos);const group=parent.has('o:'+ok)?root('o:'+ok):'o:'+ok;const r=make(group,sku);r.oldPresent=true;r.oldQty+=q;r.oldDetails.push({position:pos,deposit:dep,quantity:q});}
+  for(const [sku,q,pos,dep] of data.octosis){if(!DEPOSITS.includes(dep))continue; const ok=octPositionKey(pos);const group=oldNodes.has(ok)?root(oldNodes.get(ok)):'o:unmapped:'+ok;const r=make(group,sku);r.oldPresent=true;r.oldQty+=q;r.oldDetails.push({position:pos,deposit:dep,quantity:q});}
   const active=new Set();
   for(const [sku,q,pos,depth,container,bultos,description] of data.wms){const wk=wmsKey(pos),group=parent.has('w:'+wk)?root('w:'+wk):'w:'+wk;active.add(group);const r=make(group,sku);r.wmsPresent=true;r.wmsQty+=q;if(!r.description)r.description=description;r.wmsDetails.push({position:wk,depth,container,quantity:q,bultos});}
   for(const pos of data.meta.seenWmsPositions??[]){const wk=wmsKey(pos);active.add(parent.has('w:'+wk)?root('w:'+wk):'w:'+wk);}
@@ -23,8 +33,9 @@ function reconcile(data) {
     const group=groups.get(r.group);r.active=active.has(r.group);r.delta=r.wmsQty-r.oldQty;
     r.kind=!r.oldPresent?'Solo WMS':!r.wmsPresent?'Solo Octosis':r.delta!==0?'Cantidad distinta':'Coincide';
     r.multiple=!!group&&group.positions.length>1;
-    r.expectedPositions=[...new Set(r.oldDetails.flatMap(d=>[...(oldLinks.get(octKey(d.position))||[])]))].sort();
-    r.locationMatches=!r.wmsPresent?null:!r.mapped?false:!r.expectedPositions.length?null:r.wmsDetails.every(d=>r.expectedPositions.includes(wmsKey(d.position)));
+    r.crossOriginalLocations=[...new Set(r.wmsDetails.flatMap(d=>[...(reverseLinks.get(wmsKey(d.position))?.values()||[])]))].sort();
+    r.expectedPositions=[...new Set(r.oldDetails.flatMap(d=>[...(oldLinks.get(octPositionKey(d.position))||[])]))].sort();
+    r.locationMatches=!r.wmsPresent?null:!r.mapped?false:r.oldPresent?r.wmsDetails.every(d=>r.expectedPositions.includes(wmsKey(d.position))):r.wmsDetails.every(d=>reverseLinks.has(wmsKey(d.position)));
     r.fingerprint=fingerprint([r.oldDetails.slice().sort((a,b)=>JSON.stringify(a).localeCompare(JSON.stringify(b))),r.wmsDetails.slice().sort((a,b)=>JSON.stringify(a).localeCompare(JSON.stringify(b))),r.positions,r.oldPositions,r.saleUnit]);
     const saved=data.cases[r.id];r.review=saved??{};r.changed=!!saved&&saved.fingerprint!==r.fingerprint;
     r.status=r.changed?'Revisar cambio':saved?.status??(r.active?'Pendiente':'Sin carga WMS');
