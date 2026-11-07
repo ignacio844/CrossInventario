@@ -32,7 +32,7 @@ El servidor Node queda como alternativa local o para una sola instancia persiste
 
 ## Reglas de comparación y límites
 
-Solo se incluye Octosis de DISTRIMAR B, ALEMAR B y JUNIMAR B. Se preservan códigos de artículo (sin espacios exteriores), cantidades negativas y filas repetidas legítimas. No se deduplican saldos por código.
+Solo se incluye Octosis de DISTRIMAR B, DISTRIMAR N, ALEMAR B y JUNIMAR B. Se preservan códigos de artículo (sin espacios exteriores), cantidades negativas y filas repetidas legítimas. No se deduplican saldos por código.
 
 Cross conecta posiciones de ambos sistemas; las relaciones uno a varios y varios a uno forman grupos. Se suma cada fila una sola vez por artículo y grupo. No se distribuye arbitrariamente stock entre destinos. Las posiciones se normalizan en mayúsculas, quitando espacios en Octosis y barras decorativas en WMS. Los códigos compactos ambiguos necesitan revisión en el cross; no se inventan separaciones de números. Profundidad y contenedor se conservan como detalle WMS, ya que el cross solo indica cara/columna/nivel.
 

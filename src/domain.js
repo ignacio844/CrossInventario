@@ -1,5 +1,5 @@
 export const C3_EMAILS = ['amilano@grupo-aftermarket.com','blas@grupo-aftermarket.com','ignacio@grupo-aftermarket.com','etelias@grupo-aftermarket.com','jpajon@grupo-aftermarket.com','mcrespo@tecnologisticaconsultores.com'];
-export const DEPOSITS = ['DISTRIMAR B','ALEMAR B','JUNIMAR B'];
+export const DEPOSITS = ['DISTRIMAR B','DISTRIMAR N','ALEMAR B','JUNIMAR B'];
 export const octKey = value => String(value??'').toUpperCase().replace(/\s+/g,'');
 export const wmsKey = value => String(value??'').trim().toUpperCase().replace(/\//g,' ').replace(/\s+/g,' ');
 export function fingerprint(value) { let hash=2166136261; for(const c of JSON.stringify(value)){ hash ^= c.charCodeAt(0); hash=Math.imul(hash,16777619); } return (hash>>>0).toString(36); }

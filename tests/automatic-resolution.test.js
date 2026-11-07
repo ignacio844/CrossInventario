@@ -9,6 +9,14 @@ test('cantidad y ubicación coincidentes se resuelven sin usuario ni aprobación
   assert.deepEqual(data.cases,{});assert.equal(data.events.length,0);
   assert.equal(reconcile(data).rows[0].status,row.status);
 });
+test('DISTRIMAR N se suma a la referencia de Octosis sin duplicar otros depósitos',()=>{
+  const data=fixture();
+  data.octosis.push(['SKU',3,'OLD','DISTRIMAR N'],['SKU',100,'OLD','DISTRIMAR REV']);
+  data.wms[0][1]=8;
+  const row=reconcile(data).rows[0];
+  assert.equal(row.oldQty,8);assert.equal(row.oldDetails.length,2);
+  assert.equal(row.status,'Resuelto automáticamente');
+});
 test('cantidad distinta, ausencia de stock y cross irregular no se resuelven automáticamente',()=>{
   for(const mutate of [d=>d.wms[0][1]=4,d=>d.wms=[],d=>d.cross=[],d=>{d.octosis[0][1]=0;d.wms=[];}]){
     const data=fixture();mutate(data);
