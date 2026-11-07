@@ -24,7 +24,7 @@ test('aceptar cantidad y ubicación coincidentes admite motivo vacío; ubicació
  const user={email:C3_EMAILS[0],role:'C3'},data=fixture(),row=reconcile(data).rows[0];
  assert.equal(row.locationMatches,true);
  const action={id:row.id,action:'accept',reason:'',expectedRevision:0,requestId:'one'};
- assert.equal(applyAction(data,action,user).cases[row.id].status,'Aceptado C3');
+ assert.equal(applyAction(data,action,user).cases[row.id].status,'Aceptado');
  const different=fixture('A 002 01'),other=reconcile(different).rows[0];
  assert.equal(other.kind,'Coincide');assert.equal(other.locationMatches,false);
  assert.throws(()=>applyAction(different,{...action,id:other.id},user),/motivo/);

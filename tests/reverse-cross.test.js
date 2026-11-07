@@ -58,6 +58,6 @@ test('la corrección de presentación conserva IDs y revisiones de relaciones v�
   data=applyAction(data,{id:row.id,action:'accept',reason:'Diferencia aceptada',expectedRevision:0},{email:C3_EMAILS[0],role:'C3'});
   data.cross=[['2A 005 01',' 2A / 5   5 ']];
   const after=reconcile(data).rows[0];
-  assert.equal(after.id,row.id);assert.equal(after.status,'Aceptado C3');assert.equal(after.changed,false);
+  assert.equal(after.id,row.id);assert.equal(after.status,'Aceptado');assert.equal(after.changed,false);
   assert.equal(data.events.length,1);
 });

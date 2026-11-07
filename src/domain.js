@@ -46,7 +46,7 @@ export function reconcile(data) {
   rows.sort((a,b)=>Number(b.active)-Number(a.active)||a.positions[0].localeCompare(b.positions[0],undefined,{numeric:true})||a.sku.localeCompare(b.sku));
   return {rows,stats:{activeGroups:active.size,records:rows.filter(r=>r.active).length,missingUnits:rows.filter(r=>r.saleUnit==null).length,unmapped:rows.filter(r=>!r.mapped).length,ambiguousOld:[...oldLinks.values()].filter(s=>s.size>1).length},revision:data.revision,meta:data.meta};
 }
-export const isResolved = row => ['Aceptado C3','Verificado C3','Resuelto automáticamente'].includes(row.status);
+export const isResolved = row => ['Aceptado','Aceptado C3','Verificado C3','Resuelto automáticamente'].includes(row.status);
 export function requiresReason(row,action){return !(action==='accept'&&row.kind==='Coincide'&&row.locationMatches===true);}
 export function applyAction(data,{id,action,reason,quantity,expectedRevision,requestId},user,now=new Date().toISOString()){
   if(!user?.email)throw new Error('Iniciá sesión para guardar.');
@@ -56,9 +56,9 @@ export function applyAction(data,{id,action,reason,quantity,expectedRevision,req
   reason=String(reason??'').trim();
   if(requiresReason(row,action)&&!reason)throw new Error('Escribí un motivo o una observación.');
   if(reason.length>2000)throw new Error('La observación admite hasta 2.000 caracteres.');
-  const actions={'request-c2':'Solicitado C2','record-c2':'C2 registrado','accept':'Aceptado C3','adjust':'Ajustado en WMS','verify':'Verificado C3','reopen':'Pendiente'};
+  const actions={'request-c2':'Solicitado C2','record-c2':'C2 registrado','accept':'Aceptado','adjust':'Ajustado en WMS','verify':'Verificado C3','reopen':'Pendiente'};
   if(!actions[action])throw new Error('Acción desconocida.');
-  if(['accept','adjust','verify','reopen'].includes(action)&&user.role!=='C3')throw Object.assign(new Error('Esta acción corresponde a C3.'),{status:403});
+  if(['adjust','verify','reopen'].includes(action)&&user.role!=='C3')throw Object.assign(new Error('Esta acción corresponde a C3.'),{status:403});
   if(['record-c2','adjust'].includes(action)&&(!Number.isFinite(quantity)||quantity<0))throw new Error('Indicá una cantidad válida, mayor o igual a cero.');
   if(action==='record-c2'&&row.status!=='Solicitado C2')throw new Error('Solicitá C2 antes de registrar su resultado.');
   if(action==='verify'){
