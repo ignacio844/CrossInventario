@@ -1,0 +1,78 @@
+/* Keep the control usable at browser zoom levels and across screen sizes. */
+main{max-width:none;min-width:0;padding:24px clamp(12px,2vw,32px)}
+.workspace,.workspace-toolbar,.filters,.search,.summary button{min-width:0}
+.wms-control{min-width:0;overflow-wrap:anywhere}.wms-buttons{min-width:0;max-width:100%;flex-wrap:wrap}.wms-buttons button{max-width:100%}
+.table-wrap{width:100%;max-width:100%;isolation:isolate;overscroll-behavior-x:contain}
+.inventory-table{table-layout:fixed;border-collapse:separate;border-spacing:0;white-space:normal;min-width:1050px}
+.inventory-table th,.inventory-table td{padding:12px clamp(8px,.8vw,14px);overflow-wrap:anywhere}
+.inventory-table th:nth-child(1){width:calc(12.5% - 11px)}
+.inventory-table th:nth-child(2){width:calc(16% - 14.08px)}
+.inventory-table th:nth-child(3){width:calc(22% - 19.36px)}
+.inventory-table th:nth-child(4){width:calc(5% - 4.4px)}
+.inventory-table th:nth-child(5),.inventory-table th:nth-child(6){width:calc(7% - 6.16px)}
+.inventory-table th:nth-child(7){width:calc(10% - 8.8px)}
+.inventory-table th:nth-child(8){width:calc(12% - 10.56px)}
+.inventory-table th:nth-child(9){width:calc(8.5% - 7.48px)}
+.inventory-table .filter-trigger{white-space:normal;align-items:center;text-align:left;line-height:1.4;gap:5px}
+.filter-trigger>span{min-width:0}
+.inventory-table .filter-heading:has(.header-popover){z-index:8}
+.inventory-table .description{max-width:100%;white-space:normal;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-height:1.5}
+.inventory-table .control-cell{min-width:0;max-width:none}
+.inventory-table .status{align-items:flex-start;line-height:1.5}
+.inventory-table .tag{white-space:normal;line-height:1.4}
+.inventory-table .num{white-space:nowrap}
+.inventory-table td small,.inventory-table .barcode,.inventory-table .accepted-delta{white-space:normal}
+.inventory-table tr{--row-surface:white}
+.inventory-table tr.resolved-row{--row-surface:#f3faf6}
+.inventory-table tbody tr:hover{--row-surface:#f0f7f3;background:var(--row-surface)}
+.inventory-table .review-column{position:sticky;right:0;width:88px;min-width:88px;max-width:88px;z-index:2;background:var(--row-surface,white);box-shadow:-5px 0 10px -7px #234d3a80;border-left:1px solid #dfe8e2;padding:9px 7px;text-align:center}
+.inventory-table th.review-column{z-index:3;background:#f6f8f6;font-size:10px}
+.inventory-table .row-actions{align-items:stretch}
+.inventory-table .review{min-height:36px;width:100%;padding:7px 5px;border:1px solid #bbd3c6;background:#f0f8f3;border-radius:6px;font-size:11px;font-weight:600;gap:3px;white-space:nowrap}
+.inventory-table .review:hover{background:#e0f0e7;border-color:#78a98d}
+.filters select{min-width:0}
+.summary{grid-template-columns:repeat(4,minmax(0,1fr))}
+@media(max-width:1050px){
+ header{height:auto;min-height:76px;flex-wrap:wrap;gap:12px;padding:14px 18px}
+ .brand{min-width:0}.header-actions{max-width:100%;flex-wrap:wrap;gap:10px}
+ .account{max-width:100%;overflow-wrap:anywhere;flex-wrap:wrap}
+ .workspace-toolbar .tabs{flex-wrap:wrap;gap:4px}
+ .filters select{flex:1 1 180px;max-width:none}
+}
+@media(max-width:900px){
+ .summary{grid-template-columns:repeat(2,minmax(0,1fr))}
+ main{padding:16px 10px}.header-actions{width:100%;justify-content:space-between}.account{display:flex;font-size:10px;gap:6px}
+ .summary button{padding:13px;gap:6px}.summary strong{font-size:25px}
+ .workspace-actions{flex-wrap:wrap}.filters{padding:12px;gap:8px}.search{min-width:0;flex-basis:100%}
+ .table-wrap{overflow:visible;min-height:0}
+ .table-wrap:has(.header-popover){min-height:0}
+ .inventory-table,.inventory-table thead,.inventory-table tbody{display:block;width:100%;min-width:0}
+ .inventory-table thead>tr{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));background:#f6f8f6;padding:8px;gap:6px;border-bottom:1px solid var(--line)}
+ .inventory-table thead th:nth-child(n){display:block;width:auto;min-width:0;max-width:none;padding:0;border:0;text-align:left}
+ .inventory-table thead th.review-column{display:none}
+ .inventory-table .filter-trigger{min-height:40px;padding:8px;background:white;border:1px solid #dfe6e2;border-radius:5px;font-size:11px}
+ .inventory-table .header-popover{top:100%;left:0;right:auto;width:min(270px,calc(100vw - 40px));min-width:0;max-width:none}
+ .inventory-table th:nth-child(even) .header-popover{left:auto;right:0}
+ .inventory-table tbody>tr{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 16px;padding:14px 12px;border-bottom:1px solid #dfe6e2;border-left:3px solid transparent;background:var(--row-surface)}
+ .inventory-table tbody td{display:block;min-width:0;height:auto;padding:0;border:0;white-space:normal;order:2;box-shadow:none}
+ .inventory-table tbody tr.analysis-row{border-left-color:#e6bd75}
+ .inventory-table tbody tr.resolved-row{border-left-color:#75b796}
+ .inventory-table tbody tr td:first-child{box-shadow:none}
+ .inventory-table tbody td:before{content:attr(data-label);display:block;font-size:10px;font-weight:500;color:#647b6e;line-height:1.4;margin-bottom:4px}
+ .inventory-table tbody .article-cell{grid-column:1/-1;grid-row:1;order:0;padding-right:88px;min-height:44px}
+ .inventory-table .article-cell:before{display:none}
+ .inventory-table .article-cell>strong{font-size:14px;line-height:1.5}
+ .inventory-table tbody .review-column{position:static;grid-column:1/-1;grid-row:1;order:0;justify-self:end;align-self:start;width:80px;min-width:80px;max-width:80px;padding:0;background:transparent;box-shadow:none}
+ .inventory-table tbody .review-column:before{display:none}
+ .inventory-table .review{min-height:44px;font-size:12px}
+ .inventory-table tbody td:nth-child(5),.inventory-table tbody td:nth-child(6){order:3;text-align:left}
+ .inventory-table tbody td:nth-child(4),.inventory-table tbody td:nth-child(7){order:4;text-align:left}
+ .inventory-table tbody td:nth-child(8),.inventory-table tbody td:nth-child(9){order:5}
+ .inventory-table .location-cell strong{line-height:1.5}
+ .inventory-table .control-cell{max-width:100%}
+ .inventory-table .saved-action-preview{line-height:1.5}
+ .inventory-table .aisle-selection-summary{max-width:100%}
+ .pagination{flex-wrap:wrap;gap:12px;padding:12px}.pagination>div{margin-left:auto}
+ .case-panel .case-meta,.case-panel .case-identification{overflow-wrap:anywhere;min-width:0}
+ .comparison>div{min-width:0}.comparison strong{overflow-wrap:anywhere}
+}
