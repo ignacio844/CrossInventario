@@ -64,7 +64,6 @@ function save_(next,previous){
 }
 function validate_(type,rows,user){
  if(!['wms','cross','products','octosis'].includes(type))fail_('Tipo de archivo inválido.');
- if(type!=='wms'&&user.role!=='C3')fail_('Solo C3 puede reemplazar las referencias.',403);
  if(!Array.isArray(rows)||!rows.length||rows.length>100000)fail_('Cantidad de filas inválida.');
  const sizes={wms:7,cross:2,products:4,octosis:4},seen=new Set();
  for(const r of rows){

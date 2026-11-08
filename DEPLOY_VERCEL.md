@@ -33,13 +33,13 @@ En Google Cloud, proyecto `mapa-comercial-auth`, abrir el cliente OAuth web con 
 
 La audiencia de Google debe permitir las cuentas participantes. Si el cliente está en modo de prueba, agregar los usuarios de prueba o completar su publicación externa. La app solicita identidad Google; no acceso al Drive de cada usuario.
 
-Los seis correos C3 ya están configurados. Cualquier otra cuenta Google verificada entra como C-Administrativo. Los usuarios no necesitan acceso directo a Sheets.
+Los seis correos C3 ya están configurados. Cualquier otra cuenta Google verificada entra como C-Administrativo. El rol identifica al usuario en el historial: todas las cuentas autenticadas tienen las mismas acciones disponibles. Los usuarios no necesitan acceso directo a Sheets.
 
 ## 4. Verificación antes del operativo
 
 - Entrar con un correo C3 y otro correo Google; comprobar sus roles. No debe aparecer selector libre de rol ni modo de prueba.
 - Abrir un caso en dos sesiones. Guardar desde una y comprobar que se ve en la otra en aproximadamente 8 segundos. Un formulario desactualizado debe rechazar el guardado.
-- Registrar una observación identificada como PRUEBA y verificar autor, fecha e historial. Reabrir con C3 si corresponde.
+- Registrar una observación identificada como PRUEBA y verificar autor, fecha e historial. Reabrir si corresponde.
 - Importar un Excel WMS: revisar las filas y confirmar. Cada descarga reemplaza la anterior, sin sumar saldos.
 - Comprobar que `/seed.json` no entrega inventario.
 

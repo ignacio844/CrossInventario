@@ -13,13 +13,12 @@ function syncQueue_(sync,trigger,requestedBy){const now=Date.now();syncExpire_(s
 function syncUser_(op,user){return syncLock_(()=>{
  const properties=PropertiesService.getScriptProperties(),sync=syncRead_();
  if(op==='wms-pair'){
-  if(user.role!=='C3')fail_('Solo C3 puede conectar el equipo de descarga.',403);
   const code=Utilities.getUuid().replace(/-/g,''),expiresAt=Date.now()+10*60*1000;
   properties.setProperty('wms-pair',JSON.stringify({hash:sessionKey_(code),expiresAt,by:user.email}));
   return {code,expiresAt,productionUrl:WMS_PRODUCTION_URL};
  }
  if(op==='wms-request'){
-  if(!properties.getProperty('wms-worker-hash'))fail_('Primero C3 debe conectar el equipo de descarga.',503);
+  if(!properties.getProperty('wms-worker-hash'))fail_('Primero conectá el equipo de descarga.',503);
   const created=syncQueue_(sync,'manual',user.email);syncSave_(sync);return {coalesced:!created,wmsSync:syncPublic_()};
  }
  fail_('Operación de stock desconocida.',404);

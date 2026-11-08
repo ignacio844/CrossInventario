@@ -36,7 +36,7 @@ export function reconcile(data) {
     r.expectedPositions=[...new Set(r.oldDetails.flatMap(d=>[...(oldLinks.get(octPositionKey(d.position))||[])]))].sort();
     r.locationMatches=!r.wmsPresent?null:!r.mapped?false:r.oldPresent?r.wmsDetails.every(d=>r.expectedPositions.includes(wmsKey(d.position))):r.wmsDetails.every(d=>reverseLinks.has(wmsKey(d.position)));
     r.fingerprint=fingerprint([r.oldDetails.slice().sort((a,b)=>JSON.stringify(a).localeCompare(JSON.stringify(b))),r.wmsDetails.slice().sort((a,b)=>JSON.stringify(a).localeCompare(JSON.stringify(b))),r.positions,r.oldPositions,r.saleUnit]);
-    const saved=data.cases[r.id];r.review=saved??{};r.changed=!!saved&&saved.fingerprint!==r.fingerprint;
+    const saved=data.cases[r.id];r.review=saved??{};r.changed=!!saved?.fingerprint&&saved.fingerprint!==r.fingerprint;
     r.status=r.changed?'Revisar cambio':saved?.status??(r.active?'Pendiente':'Sin carga WMS');
     if(saved?.status==='Ajustado en WMS'&&r.changed)r.status='Verificar ajuste';
     r.autoResolved=r.kind==='Coincide'&&r.locationMatches===true;
@@ -46,19 +46,28 @@ export function reconcile(data) {
   rows.sort((a,b)=>Number(b.active)-Number(a.active)||a.positions[0].localeCompare(b.positions[0],undefined,{numeric:true})||a.sku.localeCompare(b.sku));
   return {rows,stats:{activeGroups:active.size,records:rows.filter(r=>r.active).length,missingUnits:rows.filter(r=>r.saleUnit==null).length,unmapped:rows.filter(r=>!r.mapped).length,ambiguousOld:[...oldLinks.values()].filter(s=>s.size>1).length},revision:data.revision,meta:data.meta};
 }
-export const isResolved = row => ['Aceptado','Aceptado C3','Verificado C3','Resuelto automáticamente'].includes(row.status);
-export function requiresReason(row,action){return !(action==='accept'&&row.kind==='Coincide'&&row.locationMatches===true);}
-export function applyAction(data,{id,action,reason,quantity,expectedRevision,requestId},user,now=new Date().toISOString()){
+export const isResolved = row => ['Aceptado','Aceptado C3','Verificado','Verificado C3','Resuelto automáticamente'].includes(row.status);
+export function requiresReason(row,action){return action!=='note'&&!(action==='accept'&&row.kind==='Coincide'&&row.locationMatches===true);}
+export function applyAction(data,{id,action,reason,quantity,message,expectedRevision,requestId},user,now=new Date().toISOString()){
   if(!user?.email)throw new Error('Iniciá sesión para guardar.');
   if(requestId&&data.events.some(e=>e.requestId===requestId))return data;
   if(expectedRevision!==data.revision)throw Object.assign(new Error('Otro usuario actualizó los datos. Recargá y revisá antes de guardar.'),{status:409});
-  const row=reconcile(data).rows.find(r=>r.id===id);if(!row||!row.active)throw new Error('El caso no tiene carga WMS registrada.');
+  const row=reconcile(data).rows.find(r=>r.id===id);if(!row)throw new Error('No se encontró el caso. Recargá la vista.');
+  if(action==='note'){
+    const text=String(message??'').trim();
+    if(!text)return data;
+    if(text.length>2000)throw new Error('El mensaje admite hasta 2.000 caracteres.');
+    const eventId=requestId||crypto.randomUUID(),note={id:eventId,text,at:now,by:user.email,role:user.role};
+    const previous=data.cases[id]??{},next={...previous,note,noteCount:(previous.noteCount||0)+1};
+    const event={id:eventId,requestId,caseId:id,sku:row.sku,action,at:now,user:user.email,role:user.role,note,source:data.meta.wmsFile,importId:data.meta.importId};
+    return {...data,revision:data.revision+1,cases:{...data.cases,[id]:next},events:[...data.events,event]};
+  }
+  if(!row.active)throw new Error('El caso no tiene carga WMS registrada.');
   reason=String(reason??'').trim();
   if(requiresReason(row,action)&&!reason)throw new Error('Escribí un motivo o una observación.');
   if(reason.length>2000)throw new Error('La observación admite hasta 2.000 caracteres.');
-  const actions={'request-c2':'Solicitado C2','record-c2':'C2 registrado','accept':'Aceptado','adjust':'Ajustado en WMS','verify':'Verificado C3','reopen':'Pendiente'};
+  const actions={'request-c2':'Solicitado C2','record-c2':'C2 registrado','accept':'Aceptado','adjust':'Ajustado en WMS','verify':'Verificado','reopen':'Pendiente'};
   if(!actions[action])throw new Error('Acción desconocida.');
-  if(['adjust','verify','reopen'].includes(action)&&user.role!=='C3')throw Object.assign(new Error('Esta acción corresponde a C3.'),{status:403});
   if(['record-c2','adjust'].includes(action)&&(!Number.isFinite(quantity)||quantity<0))throw new Error('Indicá una cantidad válida, mayor o igual a cero.');
   if(action==='record-c2'&&row.status!=='Solicitado C2')throw new Error('Solicitá C2 antes de registrar su resultado.');
   if(action==='verify'){

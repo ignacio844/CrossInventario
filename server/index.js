@@ -31,14 +31,14 @@ app.get('/api/history',(req,res)=>res.json({events:state.events.filter(e=>!req.q
 app.post('/api/action',async(req,res,next)=>{try{await serialized(async()=>{const next=applyAction(state,req.body,req.user);if(next!==state){await storage.save(next,state);state=next;}});res.json({...snapshot(),user:req.user});}catch(e){next(e);}});
 app.post('/api/import/preview',upload.single('file'),async(req,res,next)=>{try{
   if(!req.file)throw new Error('Elegí un archivo Excel.');
-  const type=req.body.type;if(type!=='wms'&&req.user.role!=='C3')return res.status(403).json({error:'Solo C3 puede reemplazar las referencias.'});
+  const type=req.body.type;
   const parsed=await parseWorkbook(req.file.buffer,type);const id=crypto.randomUUID();
   for(const [k,v] of pending)if(Date.now()-v.at>900000)pending.delete(k);
   if(pending.size>=20)throw new Error('Hay demasiadas importaciones pendientes. Intentá en unos minutos.');
   pending.set(id,{...parsed,type,file:req.file.originalname,user:req.user.email,at:Date.now(),revision:state.revision});res.json({id,rows:parsed.rows.length,previous:state[type].length,warnings:parsed.warnings.slice(0,30),warningCount:parsed.warnings.length,file:req.file.originalname});
 }catch(e){next(e);}});
 app.post('/api/import/commit',async(req,res,next)=>{try{
-  await serialized(async()=>{const p=pending.get(req.body.id);if(!p||p.user!==req.user.email||Date.now()-p.at>900000)throw new Error('La vista previa venció. Seleccioná el archivo nuevamente.');if(p.type!=='wms'&&req.user.role!=='C3')throw Object.assign(new Error('Acción exclusiva de C3.'),{status:403});if(state.revision!==p.revision)throw Object.assign(new Error('Los datos cambiaron. Volvé a validar el archivo antes de importarlo.'),{status:409});
+  await serialized(async()=>{const p=pending.get(req.body.id);if(!p||p.user!==req.user.email||Date.now()-p.at>900000)throw new Error('La vista previa venció. Seleccioná el archivo nuevamente.');if(state.revision!==p.revision)throw Object.assign(new Error('Los datos cambiaron. Volvé a validar el archivo antes de importarlo.'),{status:409});
     const now=new Date().toISOString(),id=crypto.randomUUID();const meta={...state.meta,[`${p.type}File`]:p.file,[`${p.type}ImportedAt`]:now};if(p.type==='wms'){meta.importedAt=now;meta.importId=id;meta.wmsCapturedAt=null;meta.seenWmsPositions=[...new Set([...(state.meta.seenWmsPositions??[]),...state.wms.map(r=>r[2]),...p.rows.map(r=>r[2])])];}
     const next={...state,[p.type]:p.rows,meta,revision:state.revision+1,events:[...state.events,{id,action:'import',type:p.type,at:now,user:req.user.email,role:req.user.role,file:p.file,rows:p.rows.length,previous:state[p.type].length,warningCount:p.warnings.length}]};await storage.save(next,state);state=next;pending.delete(req.body.id);
   });res.json({...snapshot(),user:req.user});

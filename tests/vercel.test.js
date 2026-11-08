@@ -13,10 +13,10 @@ test('gateway exige configuración y sesión, y conserva conflictos del backend'
   r=response();await handler({url:'/api?route=action',headers:{authorization:'Bearer verified-by-backend'},method:'POST',body:{expectedRevision:3}},r);assert.equal(r.code,409);
  }finally{global.fetch=fetchBefore;if(previous===undefined)delete process.env.APPS_SCRIPT_URL;else process.env.APPS_SCRIPT_URL=previous;}
 });
-test('Apps Script generado valida roles y rechaza sesión antes de acceder a Sheets',()=>{
+test('Apps Script valida las fuentes para todos los usuarios y exige sesión antes de acceder a Sheets',()=>{
  const context=vm.createContext({ContentService:{MimeType:{JSON:'json'},createTextOutput:value=>({value,setMimeType(){return this;}})}});
  vm.runInContext(fs.readFileSync(new URL('../apps-script/Code.gs',import.meta.url),'utf8'),context);
- assert.throws(()=>vm.runInContext("validate_('cross',[['A','B']],{role:'C-Administrativo'})",context),/Solo C3/);
+ assert.equal(vm.runInContext("validate_('cross',[['A','B']],{role:'C-Administrativo'}).length",context),1);
  assert.throws(()=>vm.runInContext("validate_('products',[['A','Articulo',0]],{role:'C3'})",context),/positivo/);
  const result=vm.runInContext("doPost({postData:{contents:JSON.stringify({op:'state',token:''})}})",context);
  assert.equal(JSON.parse(result.value).status,401);

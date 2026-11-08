@@ -1,3 +1,5 @@
+import {isResolved} from './domain.js';
+
 const text = value => String(value ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
 const positionText = value => text(value).replace(/[\s/]+/g, '');
 const unique = values => [...new Set(values.filter(Boolean))].sort((a,b) => a.localeCompare(b, 'es', {numeric:true}));
@@ -8,11 +10,34 @@ export function tableRow(row) {
   const loadedPositionDetails=loadedLocations.map(position=>({position,containers:unique(row.wmsDetails.filter(detail=>detail.position===position).map(detail=>String(detail.container??'').trim()))}));
   return {
     ...row,
+    ...reviewState(row),
     originalLocations: original.length ? original : unique(row.crossOriginalLocations||[]),
     loadedLocations,
     loadedPositionDetails,
     containers:unique(loadedPositionDetails.flatMap(detail=>detail.containers))
   };
+}
+
+export function reviewState(row) {
+  const done=isResolved(row),issues=[];
+  if(row.kind&&row.kind!=='Coincide')issues.push(row.kind);
+  if(row.locationMatches===false)issues.push(row.mapped===false?'Sin cross':'Ubicación distinta');
+  if(row.saleUnit===null)issues.push('Sin unidad de venta');
+  const observation=done?(row.delta!==0?'Diferencia aceptada':issues.length?'Observación aceptada':'Sin diferencias'):(issues[0]||'Por revisar');
+  return {pendingDelta:done?0:row.delta,observation,issues,needsAnalysis:!!row.active&&!done,acceptedDifference:done&&row.delta!==0};
+}
+
+export function matchesReviewFilter(row,filter) {
+  const state=reviewState(row);
+  switch(filter) {
+    case 'analysis': return state.needsAnalysis;
+    case 'different': return state.needsAnalysis&&row.delta!==0;
+    case 'accepted': return state.acceptedDifference;
+    case 'mapping': return state.needsAnalysis&&(!row.mapped||row.locationMatches===false);
+    case 'unit': return row.saleUnit===null;
+    case 'notes': return !!row.review?.note?.text;
+    default: return true;
+  }
 }
 
 export function numberMatches(value, filter) {
@@ -54,11 +79,13 @@ export function columnMatches(row, filters, aisles={}) {
     numberMatches(row.oldPresent ? row.oldQty : null, filters.oldQty || '') &&
     numberMatches(row.wmsPresent ? row.wmsQty : null, filters.wmsQty || '') &&
     numberMatches(row.delta, filters.delta || '') &&
+    numberMatches(row.pendingDelta, filters.pendingDelta || '') &&
     contains(row.kind+(row.locationMatches===false?' Ubicación distinta':''), filters.kind) &&
+    contains(row.observation,filters.observation) &&
     contains(row.status, filters.status);
 }
 
-export const numericColumns = new Set(['saleUnit','oldQty','wmsQty','delta']);
+export const numericColumns = new Set(['saleUnit','oldQty','wmsQty','delta','pendingDelta']);
 export function columnValues(row, key) {
   switch(key) {
     case 'original': return row.originalLocations;

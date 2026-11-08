@@ -34,15 +34,25 @@ test('aceptaciones históricas C3 siguen resueltas y conservan su estado y huell
   assert.equal(historical.status,'Aceptado C3');assert.equal(isResolved(historical),true);
   assert.equal(data.cases[row.id].updatedBy,'supervisor@example.test');
 });
-test('el Apps Script generado permite aceptar a un administrativo y mantiene restringidos los ajustes',()=>{
+test('el Apps Script generado habilita todo el seguimiento para todos los roles autenticados',()=>{
   const context=vm.createContext({});
   vm.runInContext(fs.readFileSync(new URL('../apps-script/Code.gs',import.meta.url),'utf8'),context);
-  context.fixture=demoData();context.payload=action(context.fixture);context.user={email:'admin@example.test',role:'C-Administrativo'};
-  const result=vm.runInContext('applyAction(fixture,payload,user)',context);
-  assert.equal(result.cases[context.payload.id].status,'Aceptado');
-  assert.equal(result.events[0].role,'C-Administrativo');
-  for(const name of ['adjust','verify','reopen']){
-    context.payload={...action(context.fixture),action:name,quantity:120};
-    assert.throws(()=>vm.runInContext('applyAction(fixture,payload,user)',context),/C3/);
+  for(const role of ['C1','C2','C-Administrativo','C3']){
+    context.fixture=demoData();context.user={email:'operario@example.test',role};
+    function save(name,extra={}){
+      context.payload={...action(context.fixture),action:name,requestId:name,...extra};
+      context.fixture=vm.runInContext('applyAction(fixture,payload,user)',context);
+      return context.fixture.cases[context.payload.id];
+    }
+    assert.equal(save('request-c2').status,'Solicitado C2');
+    assert.equal(save('record-c2',{quantity:115}).status,'C2 registrado');
+    assert.equal(save('accept').status,'Aceptado');
+    assert.equal(save('adjust',{quantity:110}).status,'Ajustado en WMS');
+    assert.throws(()=>save('verify'),/posterior/);
+    context.fixture.meta={...context.fixture.meta,importId:'posterior'};
+    assert.equal(save('verify').status,'Verificado');
+    assert.equal(save('reopen').status,'Pendiente');
+    assert.equal(context.fixture.events.length,6);
+    assert.ok(context.fixture.events.every(event=>event.role===role));
   }
 });

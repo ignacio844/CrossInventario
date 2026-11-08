@@ -55,7 +55,7 @@ test('el ciclo automático respeta cinco minutos y las credenciales desconocidas
  const s=setup();const {job}=s.worker('worker-poll');s.worker('worker-complete',s.payload(job));
  s.clock.now+=299000;assert.equal(s.worker('worker-poll').job,null);s.clock.now+=1000;assert.ok(s.worker('worker-poll').job);
  assert.throws(()=>s.call('syncWorker_(args)',{op:'worker-poll',token:'fake-token-with-at-least-40-characters-long'}),/autorizado/);
- assert.throws(()=>s.call("syncUser_('wms-pair',args)",{email:'operario@example.com',role:'C-Administrativo'}),/Solo C3/);
+ assert.ok(s.call("syncUser_('wms-pair',args)",{email:'operario@example.com',role:'C-Administrativo'}).code);
 });
 test('el vencimiento de un trabajo impide confirmar una descarga interrumpida',()=>{
  const s=setup(),{job}=s.worker('worker-poll');s.clock.now+=181000;

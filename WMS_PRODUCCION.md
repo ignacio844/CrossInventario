@@ -24,7 +24,7 @@ La carpeta `.wms` y `.env.wms` están excluidas de Git y del envío a Vercel. La
 
 ## Conectar y arrancar
 
-1. Ingresar a la app como C3 y pulsar Conectar equipo. El código vence en diez minutos.
+1. Ingresar a la app con Google y pulsar Conectar equipo. El código vence en diez minutos.
 2. Guardar ese código en un archivo privado, por ejemplo `.wms/pair-code.txt`.
 3. Ejecutar `.wms/venv/Scripts/python.exe worker/wms_agent.py --pair-file .wms/pair-code.txt`. La clave del agente se genera localmente; el servidor guarda solo su hash. El código de conexión se consume una única vez.
 4. Ejecutar `worker/Start-Wms.ps1 -RegisterStartup`. Inicia el proceso en segundo plano y registra su arranque al ingresar a Windows. Solo se permite una instancia del descargador.
