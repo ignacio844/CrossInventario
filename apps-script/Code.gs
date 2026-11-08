@@ -47,7 +47,8 @@ function reconcile(data) {
     const saved=data.cases[r.id];r.review=saved??{};r.caseVersion=JSON.stringify([r.fingerprint,saved?.decisionRevision||0,saved?.status||null,saved?.fingerprint||null,saved?.updatedAt||null,saved?.updatedBy||null]);r.changed=!!saved?.fingerprint&&saved.fingerprint!==r.fingerprint;
     r.status=r.changed?'Revisar cambio':saved?.status??(r.active?'Pendiente':'Sin carga WMS');
     if(saved?.status==='Ajustado en WMS'&&r.changed)r.status='Verificar ajuste';
-    r.autoResolved=r.kind==='Coincide'&&r.locationMatches===true;
+    const pendingAdjustment=saved?.status==='Ajustado en WMS'&&(r.wmsQty!==saved.targetQuantity||data.meta.importId===saved.adjustmentImportId||data.meta.wmsCapturedAt&&Date.parse(data.meta.wmsCapturedAt)<=Date.parse(saved.adjustmentAt||saved.updatedAt));
+    r.autoResolved=r.kind==='Coincide'&&r.locationMatches===true&&!pendingAdjustment;
     if(r.autoResolved)r.status='Resuelto automáticamente';
     return r;
   });

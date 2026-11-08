@@ -76,3 +76,11 @@ test('un cambio de cross conserva un caso histórico separado sin trasladar su a
  const retained=reconcile(next).rows.find(value=>value.id===row.id);
  assert.ok(retained);assert.equal(retained.mapped,false);assert.deepEqual(retained.positions,[]);assert.equal(retained.wmsPresent,false);
 });
+
+
+test('coincidir con Octosis no oculta un ajuste cuya cantidad objetivo todavía difiere',()=>{
+ const source=demoData(),row=reconcile(source).rows.find(row=>row.sku==='DEMO-LAMP-H7'&&row.active),[saved]=save(source,row,'adjust',{quantity:115});
+ const next={...saved,wms:saved.wms.map(stock=>stock[0]===row.sku?[stock[0],120,...stock.slice(2)]:stock),meta:{...saved.meta,importId:'posterior',wmsCapturedAt:'2026-11-08T12:05:00Z'}};
+ const pending=reconcile(next).rows.find(value=>value.id===row.id);
+ assert.equal(pending.kind,'Coincide');assert.equal(pending.autoResolved,false);assert.equal(pending.status,'Verificar ajuste');assert.equal(pending.review.targetQuantity,115);
+});
