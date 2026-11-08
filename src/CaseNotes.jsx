@@ -1,4 +1,4 @@
-import {prepareAction} from './transport.js';
+import {prepareAction,assertActionConfirmed} from './transport.js';
 import React,{useState,useRef} from 'react';
 import * as api from './api.js';
 
@@ -15,7 +15,7 @@ export default function CaseNotes({row,revision,onSave,onNotice}) {
     try {
       attempt.current=prepareAction(attempt.current,{id:row.id,action:'note',message,expectedRevision:revision,expectedCaseVersion:row.caseVersion});
       const result=await api.action(attempt.current,{onWait:setWaiting});
-      onSave(result);attempt.current=null;setMessage('');onNotice('Mensaje guardado. El estado del caso se conserva.');
+      assertActionConfirmed(result,attempt.current);onSave(result);attempt.current=null;setMessage('');onNotice('Mensaje guardado. El estado del caso se conserva.');
     } catch(error) {setError(error.message);}
     finally {setSaving(false);setWaiting('');}
   }

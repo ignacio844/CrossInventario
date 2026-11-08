@@ -28,11 +28,18 @@ export function reconcile(data) {
   const active=new Set();
   for(const [sku,q,pos,depth,container,bultos,description] of data.wms){const wk=wmsKey(pos),group=parent.has('w:'+wk)?root('w:'+wk):'w:'+wk;active.add(group);const r=make(group,sku);r.wmsPresent=true;r.wmsQty+=q;if(!r.description)r.description=description;r.wmsDetails.push({position:wk,depth,container,quantity:q,bultos});}
   for(const pos of data.meta.seenWmsPositions??[]){const wk=wmsKey(pos);active.add(parent.has('w:'+wk)?root('w:'+wk):'w:'+wk);}
+  // Retain reviewed cases even when a correction removes their last stock row.
+  // Their source quantities remain absent; no stock or locations are fabricated.
+  for(const id of Object.keys(data.cases))if(!map.has(id)){
+    try{const [group,sku]=JSON.parse(id);if(typeof group!=='string'||typeof sku!=='string'||JSON.stringify([group,sku])!==id)continue;const row=make(group,sku);row.historicalOnly=true;if(!groups.has(group)){row.positions=[];row.oldPositions=[];}}
+    catch(error){/* Ignore malformed legacy IDs, preserving their audit records. */}
+  }
   const rows=[...map.values()].map(r=>{
     const group=groups.get(r.group);r.active=active.has(r.group);r.delta=r.wmsQty-r.oldQty;
-    r.kind=!r.oldPresent?'Solo WMS':!r.wmsPresent?'Solo Octosis':r.delta!==0?'Cantidad distinta':'Coincide';
+    r.kind=!r.oldPresent&&!r.wmsPresent?'No figura en fuentes':!r.oldPresent?'Solo WMS':!r.wmsPresent?'Solo Octosis':r.delta!==0?'Cantidad distinta':'Coincide';
     r.multiple=!!group&&group.positions.length>1;
     r.crossOriginalLocations=[...new Set(r.wmsDetails.flatMap(d=>[...(reverseLinks.get(wmsKey(d.position))?.values()||[])]))].sort();
+    if(r.historicalOnly&&r.mapped&&!r.crossOriginalLocations.length)r.crossOriginalLocations=[...new Set(links.filter(link=>root(oldNodes.get(link.ok))===r.group).map(link=>link.label))].sort();
     r.expectedPositions=[...new Set(r.oldDetails.flatMap(d=>[...(oldLinks.get(octPositionKey(d.position))||[])]))].sort();
     r.locationMatches=!r.wmsPresent?null:!r.mapped?false:r.oldPresent?r.wmsDetails.every(d=>r.expectedPositions.includes(wmsKey(d.position))):r.wmsDetails.every(d=>reverseLinks.has(wmsKey(d.position)));
     r.fingerprint=fingerprint([r.oldDetails.slice().sort((a,b)=>JSON.stringify(a).localeCompare(JSON.stringify(b))),r.wmsDetails.slice().sort((a,b)=>JSON.stringify(a).localeCompare(JSON.stringify(b))),r.positions,r.oldPositions,r.saleUnit]);
@@ -43,7 +50,10 @@ export function reconcile(data) {
     if(r.autoResolved)r.status='Resuelto automáticamente';
     return r;
   });
-  rows.sort((a,b)=>Number(b.active)-Number(a.active)||a.positions[0].localeCompare(b.positions[0],undefined,{numeric:true})||a.sku.localeCompare(b.sku));
+  const loadedBySku=new Map();
+  for(const row of rows)if(row.wmsPresent){if(!loadedBySku.has(row.sku))loadedBySku.set(row.sku,[]);loadedBySku.get(row.sku).push(row);}
+  for(const row of rows)row.otherWms=(loadedBySku.get(row.sku)||[]).filter(other=>other.id!==row.id).map(other=>({id:other.id,quantity:other.wmsQty,positions:[...new Set(other.wmsDetails.map(detail=>detail.position))]}));
+  rows.sort((a,b)=>Number(b.active)-Number(a.active)||(a.positions[0]||'').localeCompare(b.positions[0]||'',undefined,{numeric:true})||a.sku.localeCompare(b.sku));
   return {rows,stats:{activeGroups:active.size,records:rows.filter(r=>r.active).length,missingUnits:rows.filter(r=>r.saleUnit==null).length,unmapped:rows.filter(r=>!r.mapped).length,ambiguousOld:[...oldLinks.values()].filter(s=>s.size>1).length},revision:data.revision,meta:data.meta};
 }
 export const isResolved = row => ['Aceptado','Aceptado C3','Verificado','Verificado C3','Resuelto automáticamente'].includes(row.status);
@@ -71,15 +81,23 @@ export function applyAction(data,{id,action,reason,quantity,message,expectedRevi
   const actions={'request-c2':'Solicitado C2','record-c2':'C2 registrado','accept':'Aceptado','adjust':'Ajustado en WMS','verify':'Verificado','reopen':'Pendiente'};
   if(!actions[action])throw new Error('Acción desconocida.');
   if(['record-c2','adjust'].includes(action)&&(!Number.isFinite(quantity)||quantity<0))throw new Error('Indicá una cantidad válida, mayor o igual a cero.');
-  if(action==='record-c2'&&row.status!=='Solicitado C2')throw new Error('Solicitá C2 antes de registrar su resultado.');
+  if(action==='record-c2'&&row.review.status!=='Solicitado C2')throw new Error('Solicitá C2 antes de registrar su resultado.');
   if(action==='verify'){
     if(row.review.status!=='Ajustado en WMS'||data.meta.importId===row.review.adjustmentImportId)throw new Error('Importá una descarga posterior al ajuste para verificarlo.');
+    if(data.meta.wmsCapturedAt&&Date.parse(data.meta.wmsCapturedAt)<=Date.parse(row.review.adjustmentAt||row.review.updatedAt))throw new Error('La descarga se tomó antes del ajuste. Esperá una captura posterior para verificarlo.');
     if(row.wmsQty!==row.review.targetQuantity)throw new Error('WMS todavía no coincide con la cantidad ajustada registrada.');
   }
   const previous=data.cases[id]??null;
-  const next={...previous,status:actions[action],decisionRevision:(previous?.decisionRevision||0)+1,reason:reason.trim(),updatedAt:now,updatedBy:user.email,fingerprint:row.fingerprint};
+  const eventId=requestId||crypto.randomUUID();
+  const next={...previous,status:actions[action],decisionRevision:(previous?.decisionRevision||0)+1,reason:reason.trim(),updatedAt:now,updatedBy:user.email,fingerprint:row.fingerprint,lastAction:action,lastRequestId:eventId,snapshot:{importId:data.meta.importId,wmsFile:data.meta.wmsFile,wmsCapturedAt:data.meta.wmsCapturedAt||data.meta.importedAt,wmsQty:row.wmsQty,oldQty:row.oldQty,wmsPresent:row.wmsPresent,wmsPositions:row.wmsDetails.map(detail=>detail.position),originalPositions:row.oldDetails.map(detail=>detail.position)}};
   if(action==='record-c2')next.c2={quantity,by:user.email,at:now,note:reason.trim()};
-  if(action==='adjust'){next.targetQuantity=quantity;next.adjustmentImportId=data.meta.importId;}
-  const event={id:requestId||crypto.randomUUID(),requestId,caseId:id,sku:row.sku,action,at:now,user:user.email,role:user.role,before:previous,after:next,wmsQty:row.wmsQty,oldQty:row.oldQty,source:data.meta.wmsFile,importId:data.meta.importId};
+  if(action==='adjust'){next.targetQuantity=quantity;next.adjustmentImportId=data.meta.importId;next.adjustmentAt=now;}
+  const event={id:eventId,requestId,caseId:id,sku:row.sku,action,at:now,user:user.email,role:user.role,before:previous,after:next,wmsQty:row.wmsQty,oldQty:row.oldQty,source:data.meta.wmsFile,importId:data.meta.importId};
   return {...data,revision:data.revision+1,cases:{...data.cases,[id]:next},events:[...data.events,event]};
+}
+
+export function actionReceipt(data,payload){
+  const event=data.events.find(event=>event.id===payload.requestId);
+  if(!event)throw Object.assign(new Error('No se pudo confirmar el registro de la acción. Tu texto se conserva; reintentá el guardado.'),{status:502,code:'UNCONFIRMED_ACTION'});
+  return {confirmed:true,requestId:payload.requestId,caseId:payload.id,action:payload.action,revision:data.revision};
 }

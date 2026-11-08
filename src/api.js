@@ -1,5 +1,5 @@
 import {fetchJson} from './transport.js';
-import {reconcile,applyAction} from './domain.js';
+import {reconcile,applyAction,actionReceipt} from './domain.js';
 
 import {demoData} from './demo.js';
 import {restoreSession,saveSession,clearSession} from './session.js';
@@ -37,7 +37,7 @@ async function request(path,body,method,credential,onWait){
  let result;
  try{result=await fetchJson('/api'+path,options,{idempotent:verb==='GET'||path==='/action'&&!!body?.requestId||path==='/import/commit'&&config?.backend==='apps-script',onWait});}
  catch(error){if(error.status===401&&!credential&&requestToken===token){forgetSession();if(typeof window!=='undefined')window.dispatchEvent(new Event('inventory-session-expired'));}throw error;}
- if(result.packed)result=await unpack(result.packed);return result.rawState?{...reconcile(result.rawState),user:result.user,wmsSync:result.wmsSync}:result;
+ if(result.packed)result=await unpack(result.packed);return result.rawState?{...reconcile(result.rawState),user:result.user,wmsSync:result.wmsSync,receipt:result.receipt}:result;
 }
 
 export async function requestWms(){return request('/wms/request',{});}
@@ -51,7 +51,7 @@ function view(){return {...reconcile(local),user:{email:'prueba@local.invalid',r
 
 export async function state(revision){return config.mode==='preview'?view():request('/state'+(revision===undefined?'':'?revision='+revision));}
 
-export async function action(body,{onWait}={}){if(config.mode!=='preview')return request('/action',body,undefined,undefined,onWait);const next=applyAction(local,body,{email:'prueba@local.invalid',role});await saveLocal(next);local=next;return view();}
+export async function action(body,{onWait}={}){if(config.mode!=='preview')return request('/action',body,undefined,undefined,onWait);const next=applyAction(local,body,{email:'prueba@local.invalid',role});await saveLocal(next);local=next;return {...view(),receipt:actionReceipt(next,body)};}
 
 export async function history(id){return config.mode==='preview'?{events:local.events.filter(e=>!id||e.caseId===id).slice().reverse()}:request('/history'+(id?'?id='+encodeURIComponent(id):''));}
 

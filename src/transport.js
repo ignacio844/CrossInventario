@@ -29,3 +29,8 @@ export function prepareAction(previous,body) {
 export function isCurrentSnapshot(snapshot,currentRevision) {
   return currentRevision===undefined||snapshot.revision>=currentRevision;
 }
+
+export function assertActionConfirmed(result,payload){
+  const receipt=result?.receipt;
+  if(!receipt?.confirmed||receipt.requestId!==payload.requestId||receipt.caseId!==payload.id||receipt.action!==payload.action)throw Object.assign(new Error('El servidor no confirmó el registro en el historial. Tu texto se conserva; reintentá guardar.'),{status:502,code:'UNCONFIRMED_ACTION'});
+}

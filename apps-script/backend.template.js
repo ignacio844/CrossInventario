@@ -95,7 +95,7 @@ function doPost(e){
   if(input.op==='session'){if(input.token.indexOf('s1.')===0)fail_('Ingresá nuevamente con Google para renovar la sesión.',401);return json_(createSession_(user));}
   if(input.op==='logout'){if(input.token.indexOf('s1.')===0){const key=sessionKey_(input.token);PropertiesService.getScriptProperties().deleteProperty(key);CacheService.getScriptCache().remove(key);}return json_({signedOut:true});}
   if(input.op==='state'&&input.revision!==null&&input.revision!==undefined&&Number(input.revision)===revision_())return json_({unchanged:true,revision:Number(input.revision),user,wmsSync:syncPublic_()});
-  if(input.op==='state')return json_(pack_({rawState:loadSnapshot_(),user,wmsSync:syncPublic_()}));
+  if(input.op==='state')return json_(pack_({rawState:loadSnapshot_(input.revision===null||input.revision===undefined),user,wmsSync:syncPublic_()}));
   if(input.op==='history')return json_(pack_(loadHistory_(input.id)));
   if(input.op==='preview'){validate_(body.type,body.rows,user);const control=readControl_(),sources=loadSources_(control);return json_({id:Utilities.getUuid(),rows:body.rows.length,previous:sources[body.type].length,warnings:[],file:String(body.file||'archivo.xlsx').slice(0,255),revision:control.revision});}
   let data,sources,control;
@@ -117,7 +117,7 @@ function doPost(e){
   }else fail_('Operación desconocida.',404);
   if(next!==data)save_(next,data);
   lock.releaseLock();lock=null;
-  return json_(pack_({rawState:{...next,events:[]},user}));
+  return json_(pack_({rawState:{...next,events:[]},user,...(input.op==='action'?{receipt:actionReceipt(next,body)}:{})}));
  }catch(err){return json_(errorResponse_(err));}
  finally{if(lock&&lock.hasLock())lock.releaseLock();}
 }

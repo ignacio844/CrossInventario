@@ -29,8 +29,8 @@ function loadReview_(withRequestIds){
  const result=Sheets.Spreadsheets.Values.batchGet(SHEET_ID,{ranges:["'Casos'!A:B","'Control'!A:B",...(withRequestIds?["'Historial'!A:A"]:[])],valueRenderOption:'UNFORMATTED_VALUE'}).valueRanges;
  return {...parseControl_(result[1].values||[]),cases:Object.fromEntries((result[0].values||[]).filter(row=>row[0]).map(row=>[row[0],JSON.parse(row[1])])),events:withRequestIds?(result[2].values||[]).map(row=>({id:row[0],requestId:row[0]})):[]};
 }
-function loadSnapshot_(){
- const warm=cachedReview_(revision_(),false);if(warm)return {...loadSources_(warm),...warm};
+function loadSnapshot_(fresh=false){
+ const warm=cachedReview_(revision_(fresh),false);if(warm)return {...loadSources_(warm),...warm};
  // Stock sources are immutable between imports and cached separately from cases.
  // Readers never take the writer lock. A fresh revision check rejects mixed reads.
  for(let attempt=0;attempt<2;attempt++){

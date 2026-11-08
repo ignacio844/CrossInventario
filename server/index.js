@@ -7,7 +7,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import {createStorage} from './storage.js';
 import {parseWorkbook} from './imports.js';
-import {C3_EMAILS,applyAction,reconcile} from '../src/domain.js';
+import {C3_EMAILS,applyAction,reconcile,actionReceipt} from '../src/domain.js';
 const base=path.dirname(path.dirname(fileURLToPath(import.meta.url)));process.chdir(base);
 const mode=process.env.DATA_MODE||'demo';const storage=await createStorage(mode);let state=await storage.load();let cache;
 const app=express();app.disable('x-powered-by');app.use(express.json({limit:'2mb'}));
@@ -28,7 +28,7 @@ app.use('/api',async(req,res,next)=>{
 });
 app.get('/api/state',(req,res)=>{if(String(state.revision)===req.query.revision)return res.json({unchanged:true,revision:state.revision});res.json({...snapshot(),user:req.user});});
 app.get('/api/history',(req,res)=>res.json({events:state.events.filter(e=>!req.query.id||e.caseId===req.query.id).slice().reverse()}));
-app.post('/api/action',async(req,res,next)=>{try{await serialized(async()=>{const next=applyAction(state,req.body,req.user);if(next!==state){await storage.save(next,state);state=next;}});res.json({...snapshot(),user:req.user});}catch(e){next(e);}});
+app.post('/api/action',async(req,res,next)=>{try{await serialized(async()=>{const next=applyAction(state,req.body,req.user);if(next!==state){await storage.save(next,state);state=next;}});res.json({...snapshot(),user:req.user,receipt:actionReceipt(state,req.body)});}catch(e){next(e);}});
 app.post('/api/import/preview',upload.single('file'),async(req,res,next)=>{try{
   if(!req.file)throw new Error('Elegí un archivo Excel.');
   const type=req.body.type;

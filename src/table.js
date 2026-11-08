@@ -35,6 +35,7 @@ export function matchesReviewFilter(row,filter) {
     case 'accepted': return state.acceptedDifference;
     case 'mapping': return state.needsAnalysis&&(!row.mapped||row.locationMatches===false);
     case 'unit': return row.saleUnit===null;
+    case 'recorded': return !!row.review?.updatedAt||!!row.review?.note;
     case 'notes': return !!row.review?.note?.text;
     default: return true;
   }
