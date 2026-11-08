@@ -1,3 +1,4 @@
+import {buildPositionSummary} from './positions.js';
 import {fetchJson} from './transport.js';
 import {reconcile,applyAction,actionReceipt} from './domain.js';
 
@@ -37,7 +38,7 @@ async function request(path,body,method,credential,onWait){
  let result;
  try{result=await fetchJson('/api'+path,options,{idempotent:verb==='GET'||path==='/action'&&!!body?.requestId||path==='/import/commit'&&config?.backend==='apps-script',onWait});}
  catch(error){if(error.status===401&&!credential&&requestToken===token){forgetSession();if(typeof window!=='undefined')window.dispatchEvent(new Event('inventory-session-expired'));}throw error;}
- if(result.packed)result=await unpack(result.packed);return result.rawState?{...reconcile(result.rawState),user:result.user,wmsSync:result.wmsSync,receipt:result.receipt}:result;
+ if(result.packed)result=await unpack(result.packed);return result.rawState?{...reconcile(result.rawState),positionSummary:buildPositionSummary(result.rawState),user:result.user,wmsSync:result.wmsSync,receipt:result.receipt}:result;
 }
 
 export async function requestWms(){return request('/wms/request',{});}
@@ -47,7 +48,7 @@ async function pack(value){const stream=new Blob([JSON.stringify(value)]).stream
 
 async function unpack(value){const bytes=Uint8Array.from(atob(value),c=>c.charCodeAt(0));return JSON.parse(await new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'))).text());}
 
-function view(){return {...reconcile(local),user:{email:'prueba@local.invalid',role}};}
+function view(){return {...reconcile(local),positionSummary:buildPositionSummary(local),user:{email:'prueba@local.invalid',role}};}
 
 export async function state(revision){return config.mode==='preview'?view():request('/state'+(revision===undefined?'':'?revision='+revision));}
 

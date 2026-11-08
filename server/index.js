@@ -1,3 +1,4 @@
+import {buildPositionSummary} from '../src/positions.js';
 import 'dotenv/config';
 import express from 'express';
 import multer from 'multer';
@@ -14,7 +15,7 @@ const app=express();app.disable('x-powered-by');app.use(express.json({limit:'2mb
 const upload=multer({storage:multer.memoryStorage(),limits:{fileSize:25*1024*1024,files:1}});const auth=new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 const pending=new Map();let queue=Promise.resolve();
 function serialized(fn){const task=queue.then(fn);queue=task.catch(()=>{});return task;}
-function snapshot(){if(!cache||cache.revision!==state.revision)cache=reconcile(state);return cache;}
+function snapshot(){if(!cache||cache.revision!==state.revision)cache={...reconcile(state),positionSummary:buildPositionSummary(state)};return cache;}
 app.get('/api/config',(req,res)=>res.json({mode,googleClientId:mode==='sheets'?process.env.GOOGLE_CLIENT_ID:null,manualWms:true}));
 app.use('/api',async(req,res,next)=>{
   res.set('Cache-Control','no-store');
