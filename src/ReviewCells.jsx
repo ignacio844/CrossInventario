@@ -35,7 +35,7 @@ export function StockContext({row,meta,onOpen}) {
   return <section className="stock-context" aria-label="Estado de la descarga WMS">
     <small>{latest?'Última descarga WMS: '+date(latest):'Stock según la última descarga WMS disponible.'}</small>
     {adjustment&&<div className="adjustment-followup"><strong>Ajuste guardado: cantidad objetivo {amount(review.targetQuantity)}</strong><p>{waiting?'Esperando una descarga posterior al ajuste.':row.wmsQty===review.targetQuantity?'La última descarga coincide con la cantidad registrada. Podés verificar el ajuste.':'La última descarga todavía no confirma la cantidad objetivo.'}</p></div>}
-    {!row.wmsPresent&&<p>{row.historicalOnly?'El caso y sus acciones se conservan, aunque el artículo ya no figure en las fuentes de stock.':'El artículo no figura en la última descarga para este grupo de posiciones.'} La ausencia en el reporte no borra el registro de revisión.</p>}
+    {!row.wmsPresent&&<p>{row.historicalOnly?'El caso y sus acciones se conservan, aunque el artículo ya no figure en este grupo de posiciones.':'El artículo no figura en la última descarga para este grupo de posiciones.'} La ausencia en el reporte no borra el registro de revisión.</p>}
     {!row.wmsPresent&&row.otherWms?.length>0&&<div className="other-stock"><strong>Hay stock del artículo en otras posiciones WMS</strong>{row.otherWms.slice(0,4).map(other=><button key={other.id} onClick={()=>onOpen?.(other)}>{other.positions.join(' · ')} · {amount(other.quantity)} u.</button>)}{row.otherWms.length>4&&<small>Consultá el total del artículo para ver todas las posiciones.</small>}</div>}
   </section>;
 }

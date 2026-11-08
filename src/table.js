@@ -20,7 +20,7 @@ export function tableRow(row) {
 
 export function reviewState(row) {
   const done=isResolved(row),issues=[];
-  if(row.kind&&row.kind!=='Coincide')issues.push(row.kind);
+  if(row.kind&&row.kind!=='Coincide')issues.push(row.kind==='No figura en fuentes'?'Sin registro en este grupo':row.kind);
   if(row.locationMatches===false)issues.push(row.mapped===false?'Sin cross':'Ubicación distinta');
   if(row.saleUnit===null)issues.push('Sin unidad de venta');
   const observation=done?(row.delta!==0?'Diferencia aceptada':issues.length?'Observación aceptada':'Sin diferencias'):(issues[0]||'Por revisar');
