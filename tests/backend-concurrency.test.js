@@ -11,7 +11,7 @@ function setup(){
  vm.runInContext(fs.readFileSync(new URL('../apps-script/Code.gs',import.meta.url),'utf8'),context);
  context.data={...demoData(),controlV2:true};context.packs=0;
  context.user_=()=>({email:'operario@example.test',role:'C-Administrativo'});
- context.readControl_=()=>({meta:context.data.meta,revision:context.data.revision});
+ context.revision_=()=>context.data.revision;context.cacheReview_=()=>{};context.readControl_=()=>({meta:context.data.meta,revision:context.data.revision});
  context.sourceStamp_=meta=>meta.importId;
  context.loadSources_=()=>{assert.equal(held,false);return Object.fromEntries(['octosis','products','cross','wms'].map(key=>[key,context.data[key]]));};
  context.loadReview_=()=>{assert.equal(held,true);return context.data;};

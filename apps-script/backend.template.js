@@ -36,17 +36,19 @@ function user_(token){
 }
 function revision_(fresh=false){
  const cache=CacheService.getScriptCache(),v=cache.get('revision');if(!fresh&&v!==null)return Number(v);
+ quotaGuard_();
  const rows=Sheets.Spreadsheets.Values.get(SHEET_ID,"'Control'!A1:B2",{valueRenderOption:'UNFORMATTED_VALUE'}).values||[];
- const rev=rows[0]?.[0]==='v2'?Number(rows[0][1]):Number(rows[1]?.[0]||0);cache.put('revision',String(rev),5);return rev;
+ const rev=rows[0]?.[0]==='v2'?Number(rows[0][1]):Number(rows[1]?.[0]||0);const current=Math.max(rev,Number(cache.get('revision')||0));cache.put('revision',String(current),30);return current;
 }
 function load_(withHistory){
+ quotaGuard_();
  const keys=Object.keys(TABLES).filter(k=>withHistory||k!=='events'),ends={octosis:'D',products:'D',cross:'B',wms:'G',cases:'B',events:'B',meta:'B'};
  const results=Sheets.Spreadsheets.Values.batchGet(SHEET_ID,{ranges:keys.map(k=>"'"+TABLES[k]+"'!A:"+ends[k]),valueRenderOption:'UNFORMATTED_VALUE'}).valueRanges;
  const all=Object.fromEntries(keys.map((k,i)=>[k,results[i].values||[]])),control=all.meta;
  return {octosis:all.octosis,products:all.products,cross:all.cross,wms:all.wms,cases:Object.fromEntries(all.cases.map(r=>[r[0],JSON.parse(r[1])])),events:withHistory?all.events.map(r=>JSON.parse(r[1])):[],meta:control[0]?.[0]==='v2'?JSON.parse(control.slice(1).map(r=>r[0]||'').join('')):JSON.parse(control[0]?.[0]||'{}'),revision:control[0]?.[0]==='v2'?Number(control[0][1]):Number(control[1]?.[0]||0)};
 }
 function save_(next,previous){
- const info=Sheets.Spreadsheets.get(SHEET_ID,{fields:'sheets.properties'}),properties=Object.fromEntries(info.sheets.map(sheet=>[sheet.properties.title,sheet.properties])),ids=Object.fromEntries(info.sheets.map(s=>[s.properties.title,s.properties.sheetId]));const requests=[];
+ const info=sheetInfo_(),properties=Object.fromEntries(info.sheets.map(sheet=>[sheet.properties.title,sheet.properties])),ids=Object.fromEntries(info.sheets.map(s=>[s.properties.title,s.properties.sheetId]));const requests=[];
  for(const k of Object.keys(TABLES)){
   if(next[k]===previous[k]&&k!=='meta')continue;
   const meta=JSON.stringify(next.meta),control=[['v2',next.revision],...(meta.match(/[\s\S]{1,35000}/g)||['{}']).map(x=>[x])];
@@ -66,7 +68,8 @@ function save_(next,previous){
   else requests.push({updateCells:{range:{sheetId,startRowIndex:0,endRowIndex:size,startColumnIndex:0,endColumnIndex:10},rows:cells(rows),fields:'userEnteredValue'}});
  }
  Sheets.Spreadsheets.batchUpdate({requests},SHEET_ID);
- CacheService.getScriptCache().put('revision',String(next.revision),5);
+ try{cacheReview_(next,true);if(next.meta!==previous.meta)cacheSources_('sources-v1:'+sourceStamp_(next.meta),Object.fromEntries(['octosis','products','cross','wms'].map(key=>[key,next[key]])));if(requests.some(request=>request.updateSheetProperties))CacheService.getScriptCache().remove?.('sheet-properties-v1');}catch(error){}
+ CacheService.getScriptCache().put('revision',String(next.revision),30);
 }
 function validate_(type,rows,user){
  if(!['wms','cross','products','octosis'].includes(type))fail_('Tipo de archivo inválido.');
@@ -96,10 +99,10 @@ function doPost(e){
   if(input.op==='history')return json_(pack_(loadHistory_(input.id)));
   if(input.op==='preview'){validate_(body.type,body.rows,user);const control=readControl_(),sources=loadSources_(control);return json_({id:Utilities.getUuid(),rows:body.rows.length,previous:sources[body.type].length,warnings:[],file:String(body.file||'archivo.xlsx').slice(0,255),revision:control.revision});}
   let data,sources,control;
-  if(input.op==='action'){control=readControl_();sources=loadSources_(control);}
+  if(input.op==='action'){quotaGuard_();control=actionControl_();sources=loadSources_(control);}
   lock=LockService.getScriptLock();if(!lock.tryLock(2000))busy_();
   if(input.op==='action'){
-   const review=loadReview_(true);if(sourceStamp_(review.meta)!==sourceStamp_(control.meta))busy_();data={...sources,...review};
+   const review=actionReview_();if(sourceStamp_(review.meta)!==sourceStamp_(control.meta))busy_();data={...sources,...review};
   }else data=load_(true);
   let next;
   if(input.op==='action')next=applyAction(data,body,user);
@@ -115,7 +118,7 @@ function doPost(e){
   if(next!==data)save_(next,data);
   lock.releaseLock();lock=null;
   return json_(pack_({rawState:{...next,events:[]},user}));
- }catch(err){return json_({status:err.status||400,code:err.code,error:err.message||'No se pudo completar la operación.'});}
+ }catch(err){return json_(errorResponse_(err));}
  finally{if(lock&&lock.hasLock())lock.releaseLock();}
 }
 function comprobarConfiguracion(){const d=load_(false);console.log(JSON.stringify({sheetId:SHEET_ID,revision:d.revision,octosis:d.octosis.length,products:d.products.length,cross:d.cross.length,wms:d.wms.length}));}
