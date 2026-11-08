@@ -1,3 +1,4 @@
+import {fetchJson} from './transport.js';
 import {reconcile,applyAction} from './domain.js';
 
 import {demoData} from './demo.js';
@@ -30,7 +31,15 @@ export async function init(){
 
 }
 
-async function request(path,body,method,credential){const headers={'x-demo-role':role};if(credential||token)headers.Authorization='Bearer '+(credential||token);if(body&&!(body instanceof FormData))headers['Content-Type']='application/json';const r=await fetch('/api'+path,{method:method||(body?'POST':'GET'),headers,body:body instanceof FormData?body:body?JSON.stringify(body):undefined});let result=await r.json();if(!r.ok){if(r.status===401&&!credential){forgetSession();if(typeof window!=='undefined')window.dispatchEvent(new Event('inventory-session-expired'));}throw new Error(result.error||'Error de conexión.');}if(result.packed)result=await unpack(result.packed);return result.rawState?{...reconcile(result.rawState),user:result.user,wmsSync:result.wmsSync}:result;}
+async function request(path,body,method,credential,onWait){
+ const requestToken=credential||token,headers={'x-demo-role':role};if(requestToken)headers.Authorization='Bearer '+requestToken;if(body&&!(body instanceof FormData))headers['Content-Type']='application/json';
+ const verb=method||(body?'POST':'GET'),options={method:verb,headers,body:body instanceof FormData?body:body?JSON.stringify(body):undefined};
+ let result;
+ try{result=await fetchJson('/api'+path,options,{idempotent:verb==='GET'||path==='/action'&&!!body?.requestId||path==='/import/commit'&&config?.backend==='apps-script',onWait});}
+ catch(error){if(error.status===401&&!credential&&requestToken===token){forgetSession();if(typeof window!=='undefined')window.dispatchEvent(new Event('inventory-session-expired'));}throw error;}
+ if(result.packed)result=await unpack(result.packed);return result.rawState?{...reconcile(result.rawState),user:result.user,wmsSync:result.wmsSync}:result;
+}
+
 export async function requestWms(){return request('/wms/request',{});}
 export async function pairWms(){return request('/wms/pair',{});}
 
@@ -42,7 +51,7 @@ function view(){return {...reconcile(local),user:{email:'prueba@local.invalid',r
 
 export async function state(revision){return config.mode==='preview'?view():request('/state'+(revision===undefined?'':'?revision='+revision));}
 
-export async function action(body){if(config.mode!=='preview')return request('/action',body);const next=applyAction(local,body,{email:'prueba@local.invalid',role});await saveLocal(next);local=next;return view();}
+export async function action(body,{onWait}={}){if(config.mode!=='preview')return request('/action',body,undefined,undefined,onWait);const next=applyAction(local,body,{email:'prueba@local.invalid',role});await saveLocal(next);local=next;return view();}
 
 export async function history(id){return config.mode==='preview'?{events:local.events.filter(e=>!id||e.caseId===id).slice().reverse()}:request('/history'+(id?'?id='+encodeURIComponent(id):''));}
 

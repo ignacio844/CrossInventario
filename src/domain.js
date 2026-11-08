@@ -36,7 +36,7 @@ export function reconcile(data) {
     r.expectedPositions=[...new Set(r.oldDetails.flatMap(d=>[...(oldLinks.get(octPositionKey(d.position))||[])]))].sort();
     r.locationMatches=!r.wmsPresent?null:!r.mapped?false:r.oldPresent?r.wmsDetails.every(d=>r.expectedPositions.includes(wmsKey(d.position))):r.wmsDetails.every(d=>reverseLinks.has(wmsKey(d.position)));
     r.fingerprint=fingerprint([r.oldDetails.slice().sort((a,b)=>JSON.stringify(a).localeCompare(JSON.stringify(b))),r.wmsDetails.slice().sort((a,b)=>JSON.stringify(a).localeCompare(JSON.stringify(b))),r.positions,r.oldPositions,r.saleUnit]);
-    const saved=data.cases[r.id];r.review=saved??{};r.changed=!!saved?.fingerprint&&saved.fingerprint!==r.fingerprint;
+    const saved=data.cases[r.id];r.review=saved??{};r.caseVersion=JSON.stringify([r.fingerprint,saved?.decisionRevision||0,saved?.status||null,saved?.fingerprint||null,saved?.updatedAt||null,saved?.updatedBy||null]);r.changed=!!saved?.fingerprint&&saved.fingerprint!==r.fingerprint;
     r.status=r.changed?'Revisar cambio':saved?.status??(r.active?'Pendiente':'Sin carga WMS');
     if(saved?.status==='Ajustado en WMS'&&r.changed)r.status='Verificar ajuste';
     r.autoResolved=r.kind==='Coincide'&&r.locationMatches===true;
@@ -48,11 +48,13 @@ export function reconcile(data) {
 }
 export const isResolved = row => ['Aceptado','Aceptado C3','Verificado','Verificado C3','Resuelto automáticamente'].includes(row.status);
 export function requiresReason(row,action){return action!=='note'&&!(action==='accept'&&row.kind==='Coincide'&&row.locationMatches===true);}
-export function applyAction(data,{id,action,reason,quantity,message,expectedRevision,requestId},user,now=new Date().toISOString()){
+export function applyAction(data,{id,action,reason,quantity,message,expectedRevision,expectedCaseVersion,requestId},user,now=new Date().toISOString()){
   if(!user?.email)throw new Error('Iniciá sesión para guardar.');
   if(requestId&&data.events.some(e=>e.requestId===requestId))return data;
-  if(expectedRevision!==data.revision)throw Object.assign(new Error('Otro usuario actualizó los datos. Recargá y revisá antes de guardar.'),{status:409});
   const row=reconcile(data).rows.find(r=>r.id===id);if(!row)throw new Error('No se encontró el caso. Recargá la vista.');
+  if(typeof expectedCaseVersion==='string'){
+    if(action!=='note'&&expectedCaseVersion!==row.caseVersion)throw Object.assign(new Error('Este caso cambió mientras lo revisabas. Actualizá los datos y revisalos antes de guardar. Tu texto se conserva.'),{status:409,code:'CASE_CHANGED'});
+  }else if(expectedRevision!==data.revision)throw Object.assign(new Error('Otro usuario actualizó los datos. Recargá y revisá antes de guardar.'),{status:409,code:'REVISION_CHANGED'});
   if(action==='note'){
     const text=String(message??'').trim();
     if(!text)return data;
@@ -75,7 +77,7 @@ export function applyAction(data,{id,action,reason,quantity,message,expectedRevi
     if(row.wmsQty!==row.review.targetQuantity)throw new Error('WMS todavía no coincide con la cantidad ajustada registrada.');
   }
   const previous=data.cases[id]??null;
-  const next={...previous,status:actions[action],reason:reason.trim(),updatedAt:now,updatedBy:user.email,fingerprint:row.fingerprint};
+  const next={...previous,status:actions[action],decisionRevision:(previous?.decisionRevision||0)+1,reason:reason.trim(),updatedAt:now,updatedBy:user.email,fingerprint:row.fingerprint};
   if(action==='record-c2')next.c2={quantity,by:user.email,at:now,note:reason.trim()};
   if(action==='adjust'){next.targetQuantity=quantity;next.adjustmentImportId=data.meta.importId;}
   const event={id:requestId||crypto.randomUUID(),requestId,caseId:id,sku:row.sku,action,at:now,user:user.email,role:user.role,before:previous,after:next,wmsQty:row.wmsQty,oldQty:row.oldQty,source:data.meta.wmsFile,importId:data.meta.importId};

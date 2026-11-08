@@ -34,8 +34,8 @@ function user_(token){
  if(!cached)cache.put('user:'+digest,JSON.stringify({aud:p.aud,iss:p.iss,email_verified:p.email_verified,exp:p.exp,email:p.email}),Math.max(1,Math.min(300,Number(p.exp)-now)));
  const email=p.email.toLowerCase();return {email,role:C3_EMAILS.includes(email)?'C3':'C-Administrativo'};
 }
-function revision_(){
- const cache=CacheService.getScriptCache(),v=cache.get('revision');if(v!==null)return Number(v);
+function revision_(fresh=false){
+ const cache=CacheService.getScriptCache(),v=cache.get('revision');if(!fresh&&v!==null)return Number(v);
  const rows=Sheets.Spreadsheets.Values.get(SHEET_ID,"'Control'!A1:B2",{valueRenderOption:'UNFORMATTED_VALUE'}).values||[];
  const rev=rows[0]?.[0]==='v2'?Number(rows[0][1]):Number(rows[1]?.[0]||0);cache.put('revision',String(rev),5);return rev;
 }
@@ -46,7 +46,7 @@ function load_(withHistory){
  return {octosis:all.octosis,products:all.products,cross:all.cross,wms:all.wms,cases:Object.fromEntries(all.cases.map(r=>[r[0],JSON.parse(r[1])])),events:withHistory?all.events.map(r=>JSON.parse(r[1])):[],meta:control[0]?.[0]==='v2'?JSON.parse(control.slice(1).map(r=>r[0]||'').join('')):JSON.parse(control[0]?.[0]||'{}'),revision:control[0]?.[0]==='v2'?Number(control[0][1]):Number(control[1]?.[0]||0)};
 }
 function save_(next,previous){
- const info=Sheets.Spreadsheets.get(SHEET_ID,{fields:'sheets.properties'}),ids=Object.fromEntries(info.sheets.map(s=>[s.properties.title,s.properties.sheetId]));const requests=[];
+ const info=Sheets.Spreadsheets.get(SHEET_ID,{fields:'sheets.properties'}),properties=Object.fromEntries(info.sheets.map(sheet=>[sheet.properties.title,sheet.properties])),ids=Object.fromEntries(info.sheets.map(s=>[s.properties.title,s.properties.sheetId]));const requests=[];
  for(const k of Object.keys(TABLES)){
   if(next[k]===previous[k]&&k!=='meta')continue;
   const meta=JSON.stringify(next.meta),control=[['v2',next.revision],...(meta.match(/[\s\S]{1,35000}/g)||['{}']).map(x=>[x])];
@@ -54,9 +54,15 @@ function save_(next,previous){
   const oldCount=k==='cases'?Object.keys(previous.cases).length:k==='events'?previous.events.length:k==='meta'?Math.max(2,1+Math.ceil(JSON.stringify(previous.meta).length/35000)):previous[k].length;
   const size=Math.max(rows.length,oldCount,1),sheetId=ids[TABLES[k]];
   if(sheetId===undefined)fail_('Falta la pestaña '+TABLES[k]+' en la planilla.');
-  requests.push({updateSheetProperties:{properties:{sheetId,gridProperties:{rowCount:Math.max(size,1000),columnCount:10}},fields:'gridProperties.rowCount,gridProperties.columnCount'}});
+  const grid=properties[TABLES[k]].gridProperties||{};
+  if((grid.rowCount||0)<size||(grid.columnCount||0)<10)requests.push({updateSheetProperties:{properties:{sheetId,gridProperties:{rowCount:Math.max(size,grid.rowCount||0,1000),columnCount:Math.max(10,grid.columnCount||0)}},fields:'gridProperties.rowCount,gridProperties.columnCount'}});
   const cells=rs=>rs.map(r=>({values:r.map(v=>({userEnteredValue:typeof v==='number'?{numberValue:v}:{stringValue:String(v??'')}}))}));
-  if(k==='events')requests.push({appendCells:{sheetId,rows:cells(rows.slice(previous.events.length)),fields:'userEnteredValue'}});
+  if(k==='cases'){
+   const indices=new Map(Object.keys(previous.cases).map((id,index)=>[id,index]));let append=indices.size;
+   for(const [id,value] of Object.entries(next.cases))if(value!==previous.cases[id])requests.push({updateCells:{start:{sheetId,rowIndex:indices.has(id)?indices.get(id):append++,columnIndex:0},rows:cells([[id,JSON.stringify(value)]]),fields:'userEnteredValue'}});
+  }
+  else if(k==='meta'&&next.meta===previous.meta&&previous.controlV2!==false)requests.push({updateCells:{start:{sheetId,rowIndex:0,columnIndex:1},rows:cells([[next.revision]]),fields:'userEnteredValue'}});
+  else if(k==='events')requests.push({appendCells:{sheetId,rows:cells(rows.slice(previous.events.length)),fields:'userEnteredValue'}});
   else requests.push({updateCells:{range:{sheetId,startRowIndex:0,endRowIndex:size,startColumnIndex:0,endColumnIndex:10},rows:cells(rows),fields:'userEnteredValue'}});
  }
  Sheets.Spreadsheets.batchUpdate({requests},SHEET_ID);
@@ -86,11 +92,15 @@ function doPost(e){
   if(input.op==='session'){if(input.token.indexOf('s1.')===0)fail_('Ingresá nuevamente con Google para renovar la sesión.',401);return json_(createSession_(user));}
   if(input.op==='logout'){if(input.token.indexOf('s1.')===0){const key=sessionKey_(input.token);PropertiesService.getScriptProperties().deleteProperty(key);CacheService.getScriptCache().remove(key);}return json_({signedOut:true});}
   if(input.op==='state'&&input.revision!==null&&input.revision!==undefined&&Number(input.revision)===revision_())return json_({unchanged:true,revision:Number(input.revision),user,wmsSync:syncPublic_()});
-  lock=LockService.getScriptLock();if(!lock.tryLock(20000))fail_('Hay otra operación en curso. Intentá nuevamente.',429);
-  const writes=['action','import'].includes(input.op),data=load_(writes||input.op==='history');
-  if(input.op==='state')return json_(pack_({rawState:data,user,wmsSync:syncPublic_()}));
-  if(input.op==='history')return json_(pack_({events:data.events.filter(x=>!input.id||x.caseId===input.id).reverse()}));
-  if(input.op==='preview'){validate_(body.type,body.rows,user);return json_({id:Utilities.getUuid(),rows:body.rows.length,previous:data[body.type].length,warnings:[],file:String(body.file||'archivo.xlsx').slice(0,255),revision:data.revision});}
+  if(input.op==='state')return json_(pack_({rawState:loadSnapshot_(),user,wmsSync:syncPublic_()}));
+  if(input.op==='history')return json_(pack_(loadHistory_(input.id)));
+  if(input.op==='preview'){validate_(body.type,body.rows,user);const control=readControl_(),sources=loadSources_(control);return json_({id:Utilities.getUuid(),rows:body.rows.length,previous:sources[body.type].length,warnings:[],file:String(body.file||'archivo.xlsx').slice(0,255),revision:control.revision});}
+  let data,sources,control;
+  if(input.op==='action'){control=readControl_();sources=loadSources_(control);}
+  lock=LockService.getScriptLock();if(!lock.tryLock(2000))busy_();
+  if(input.op==='action'){
+   const review=loadReview_(true);if(sourceStamp_(review.meta)!==sourceStamp_(control.meta))busy_();data={...sources,...review};
+  }else data=load_(true);
   let next;
   if(input.op==='action')next=applyAction(data,body,user);
   else if(input.op==='import'){
@@ -103,8 +113,9 @@ function doPost(e){
    next={...data,[body.type]:body.rows,meta,revision:data.revision+1,events:[...data.events,{id:body.requestId,action:'import',type:body.type,at:now,user:user.email,role:user.role,file,rows:body.rows.length,previous:data[body.type].length}]};
   }else fail_('Operación desconocida.',404);
   if(next!==data)save_(next,data);
+  lock.releaseLock();lock=null;
   return json_(pack_({rawState:{...next,events:[]},user}));
- }catch(err){return json_({status:err.status||400,error:err.message||'No se pudo completar la operación.'});}
+ }catch(err){return json_({status:err.status||400,code:err.code,error:err.message||'No se pudo completar la operación.'});}
  finally{if(lock&&lock.hasLock())lock.releaseLock();}
 }
 function comprobarConfiguracion(){const d=load_(false);console.log(JSON.stringify({sheetId:SHEET_ID,revision:d.revision,octosis:d.octosis.length,products:d.products.length,cross:d.cross.length,wms:d.wms.length}));}

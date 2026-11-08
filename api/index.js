@@ -13,7 +13,7 @@ export default async function handler(req,res){
  let body=req.body??{};if(typeof body==='string'){try{body=JSON.parse(body);}catch{return res.status(400).json({error:'Solicitud inválida.'});}}
  try{
   const response=await fetch(endpoint,{method:'POST',redirect:'follow',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({op,token,revision:url.searchParams.get('revision'),id:url.searchParams.get('id'),body}),signal:AbortSignal.timeout(55000)});
-  if(!response.ok)return res.status(502).json({error:'Apps Script no respondió correctamente. Intentá nuevamente.'});
+  if(!response.ok)return res.status(response.status===429?429:502).json({error:'Apps Script está ocupado. La app reintentará sin cerrar tu sesión.'});
   const raw=await response.text();let result;try{result=JSON.parse(raw);}catch{return res.status(502).json({error:'El despliegue Apps Script devolvió una página en lugar de datos. Revisá su URL y el acceso del despliegue.'});}
   return res.status(result.status||200).json(result);
  }catch{return res.status(502).json({error:'No se pudo confirmar la operación. Actualizá la vista antes de reintentar; no se mostrará como guardada hasta verificarla.'});}

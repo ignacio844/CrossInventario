@@ -12,7 +12,7 @@ En `DATA_MODE=demo`, el servidor escucha solamente en la computadora local y gua
 
 Seguir **DEPLOY_VERCEL.md**. Vercel sirve React y una funcion sin estado conecta con Apps Script. Apps Script verifica Google, asigna roles y coordina escrituras concurrentes en Sheets. La planilla inicial ya fue creada con los cuatro archivos. El despliegue lo realiza el usuario; no requiere cuenta de servicio ni clave privada.
 
-La app consulta cambios cada 8 segundos. El descargador local consulta SGL de producción cada cinco minutos y a solicitud del botón Descargar stock WMS. Ver **WMS_PRODUCCION.md** para conectar el equipo. No editar directamente las pestañas de datos durante el operativo.
+La app consulta cambios cada 8–10 segundos, sin superponer consultas. El descargador local consulta SGL de producción cada cinco minutos y a solicitud del botón Descargar stock WMS. Ver **WMS_PRODUCCION.md** para conectar el equipo. No editar directamente las pestañas de datos durante el operativo.
 
 El servidor Node queda como alternativa local o para una sola instancia persistente; no es el backend de Vercel. DEPLOY_GOOGLE.md describe esa alternativa.
 
@@ -30,6 +30,7 @@ El servidor Node queda como alternativa local o para una sola instancia persiste
 - Los casos resueltos muestran Diferencia pendiente en cero y Control en verde. La diferencia real se mantiene como referencia y en el CSV; no se modifican las cantidades de Octosis ni WMS. Por analizar reúne los casos activos pendientes, incluso los que requieren revisar ubicación. Los filtros distinguen diferencias pendientes, aceptadas y casos con mensajes.
 - Se puede dejar un mensaje opcional para análisis o ajuste desde Revisar, sin aceptar ni cerrar el caso. La tabla muestra el último mensaje; todos quedan en el historial con autor, rol y fecha. Guardar mensajes no altera la huella de una decisión ni elimina alertas por cambios de stock.
 - Si cambia la cantidad, distribución, referencia o unidad de un caso revisado, se señala para revisión. El historial anterior permanece.
+- Los guardados controlan la versión de cada caso: otros artículos no invalidan una acción. Si el mismo caso cambia, se conserva el borrador y se pide actualizarlo antes de guardar. Los mensajes se agregan sin reemplazar decisiones. La app reintenta los bloqueos temporales con el mismo identificador para evitar duplicados; solamente una sesión inválida cierra el acceso. Las lecturas y el historial no toman el bloqueo de escritura.
 - Actualizar vista consulta los datos compartidos. Descargar stock WMS solicita una exportación nueva de producción a la computadora conectada; el mismo proceso atiende el ciclo automático de cinco minutos. Varias solicitudes concurrentes comparten la descarga activa.
 
 ## Reglas de comparación y límites

@@ -46,5 +46,5 @@ app.post('/api/import/commit',async(req,res,next)=>{try{
 app.use('/api',(req,res)=>res.status(404).json({error:'Operación no disponible.'}));
 app.get('/seed.json',(req,res,next)=>mode==='sheets'?res.status(404).end():next());
 app.use(express.static(path.join(base,'dist')));app.get('/{*path}',(req,res)=>res.sendFile(path.join(base,'dist/index.html')));
-app.use((err,req,res,next)=>{console.error(err.message);res.status(err.status||400).json({error:err.message||'No se pudo completar la operación.'});});
+app.use((err,req,res,next)=>{console.error(err.message);res.status(err.status||400).json({error:err.message||'No se pudo completar la operación.',code:err.code});});
 const port=Number(process.env.PORT||4173),host=process.env.HOST||(mode==='sheets'?'0.0.0.0':'127.0.0.1');app.listen(port,host,()=>console.log(`Control de inventario: http://${host}:${port} (${mode})`));
