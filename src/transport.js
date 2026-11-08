@@ -21,7 +21,7 @@ export async function fetchJson(url,options,{idempotent=false,onWait,sleep=pause
 }
 
 export function prepareAction(previous,body) {
-  const key=value=>JSON.stringify({...value,requestId:undefined,expectedRevision:typeof value.expectedCaseVersion==='string'?undefined:value.expectedRevision});
+  const key=value=>JSON.stringify({...value,requestId:undefined,expectedCaseVersion:value.action==='note'?undefined:value.expectedCaseVersion,expectedRevision:typeof value.expectedCaseVersion==='string'?undefined:value.expectedRevision});
   return previous&&key(previous)===key(body)?previous:{...body,requestId:crypto.randomUUID()};
 }
 

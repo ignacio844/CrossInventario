@@ -88,6 +88,7 @@ test('un conflicto real o una sesión inválida no se reintentan ni se convierte
 test('los reintentos manuales conservan el ID si el borrador es igual y los snapshots viejos se ignoran',()=>{
  const body=payload(reconcile(fixture(1)).rows[0]),first=prepareAction(null,body);
  assert.equal(prepareAction(first,{...body,expectedRevision:99}),first);
+ const note=prepareAction(null,{...body,action:'note',message:'Revisar'});assert.equal(prepareAction(note,{...note,expectedRevision:99,expectedCaseVersion:'otra-decision'}),note);
  assert.notEqual(prepareAction(first,{...body,reason:'Otra decisión'}).requestId,first.requestId);
  assert.notEqual(prepareAction(first,{...body,expectedCaseVersion:'actualizado'}).requestId,first.requestId);
  assert.equal(isCurrentSnapshot({revision:3},5),false);assert.equal(isCurrentSnapshot({revision:6},5),true);
