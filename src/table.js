@@ -8,12 +8,21 @@ export function tableRow(row) {
   const original = unique(row.oldDetails.map(detail => detail.position));
   const loadedLocations=unique(row.wmsDetails.map(detail=>detail.position));
   const loadedPositionDetails=loadedLocations.map(position=>({position,containers:unique(row.wmsDetails.filter(detail=>detail.position===position).map(detail=>String(detail.container??'').trim()))}));
+  const stock=new Map();
+  for(const detail of row.wmsDetails){
+    if(!Number.isFinite(detail.quantity))continue;
+    const container=String(detail.container??'').trim(),key=JSON.stringify([detail.position,container]);
+    if(!stock.has(key))stock.set(key,{position:detail.position,container,quantity:0});
+    stock.get(key).quantity+=detail.quantity;
+  }
+  const wmsStockLines=[...stock.values()].sort((a,b)=>a.position.localeCompare(b.position,'es',{numeric:true})||a.container.localeCompare(b.container,'es',{numeric:true}));
   return {
     ...row,
     ...reviewState(row),
     originalLocations: original.length ? original : unique(row.crossOriginalLocations||[]),
     loadedLocations,
     loadedPositionDetails,
+    wmsStockLines,
     containers:unique(loadedPositionDetails.flatMap(detail=>detail.containers))
   };
 }
