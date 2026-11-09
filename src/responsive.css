@@ -1,4 +1,5 @@
 /* Keep the control usable at browser zoom levels and across screen sizes. */
+
 main{max-width:none;min-width:0;padding:24px clamp(12px,2vw,32px)}
 .workspace,.workspace-toolbar,.filters,.search,.summary button{min-width:0}
 .wms-control{min-width:0;overflow-wrap:anywhere}.wms-buttons{min-width:0;max-width:100%;flex-wrap:wrap}.wms-buttons button{max-width:100%}
@@ -75,4 +76,17 @@ main{max-width:none;min-width:0;padding:24px clamp(12px,2vw,32px)}
  .pagination{flex-wrap:wrap;gap:12px;padding:12px}.pagination>div{margin-left:auto}
  .case-panel .case-meta,.case-panel .case-identification{overflow-wrap:anywhere;min-width:0}
  .comparison>div{min-width:0}.comparison strong{overflow-wrap:anywhere}
+}
+@media(min-width:901px){
+ .inventory-table th,.inventory-table td{text-align:center;vertical-align:middle}
+ .inventory-table .filter-trigger{position:relative;justify-content:center;text-align:center;padding-inline:16px}
+ .inventory-table .filter-trigger>svg{position:absolute;right:0}
+ .inventory-table .description{margin-left:auto;margin-right:auto}
+ .inventory-table .status,.inventory-table .review-issues{justify-content:center}
+ .inventory-table .note-preview,.inventory-table .saved-action-preview{text-align:center}
+ .inventory-table .header-popover{text-align:left}
+ .inventory-table .wms-stock{text-align:center}
+ .inventory-table .wms-stock-line{justify-content:center}
+ .inventory-table .wms-stock-line>span{flex:0 0 auto}
+ .inventory-table .wms-stock-line>strong{margin-left:0}
 }
