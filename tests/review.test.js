@@ -37,7 +37,7 @@ test('estados históricos y verificaciones se ven saldados; las coincidencias se
 });
 
 test('una ubicación irregular con cantidad igual requiere análisis hasta ser aceptada',()=>{
-  const row={...lamp(demoData()),kind:'Coincide',delta:0,locationMatches:false,status:'Pendiente'};
+  const row={...lamp(demoData()),kind:'Coincide',delta:0,reviewedDelta:0,locationMatches:false,status:'Pendiente'};
   const pending=tableRow(row);
   assert.equal(pending.needsAnalysis,true);assert.equal(pending.observation,'Ubicación distinta');
   assert.equal(matchesReviewFilter(pending,'mapping'),true);
@@ -79,8 +79,8 @@ test('mensajes no esconden cambios de stock posteriores a una aceptación',()=>{
   const changed={...accepted,wms:accepted.wms.map(row=>row[0]==='DEMO-LAMP-H7'?[row[0],109,...row.slice(2)]:row)};
   const previous=lamp(changed).review.fingerprint;
   const after=lamp(save(changed,'note',{message:'Revisar la corrección de WMS'}));
-  assert.equal(after.status,'Revisar cambio');assert.equal(after.changed,true);
-  assert.equal(after.review.fingerprint,previous);assert.equal(tableRow(after).pendingDelta,-11);
+  assert.equal(after.status,'Aceptado');assert.equal(after.changed,true);assert.equal(after.closurePreserved,true);
+  assert.equal(after.review.fingerprint,previous);assert.equal(tableRow(after).pendingDelta,0);assert.equal(tableRow(after).reviewedDelta,-10);assert.equal(after.postReviewDelta,-1);
 });
 
 test('se pueden dejar mensajes sin carga WMS, sin habilitar ni cerrar su revisión',()=>{

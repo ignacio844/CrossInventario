@@ -60,7 +60,8 @@ function syncWorker_(input){return syncLock_(()=>{
   if((data.meta.importId||null)!==job.baseImportId){job.status='error';job.error='Se importó otro stock mientras se descargaba. Pedí una nueva descarga.';job.finishedAt=new Date(now).toISOString();sync.lastError=job.error;syncSave_(sync);fail_(job.error,409);}
   const at=new Date(now).toISOString(),file=String(body.file||'TC_Stock.xlsx').slice(0,255),meta={...data.meta,wmsFile:file,wmsImportedAt:at,importedAt:at,wmsCapturedAt:body.capturedAt,importId:job.id,wmsProductionUrl:WMS_PRODUCTION_URL,seenWmsPositions:[...new Set([...(data.meta.seenWmsPositions||[]),...data.wms.map(r=>r[2]),...body.rows.map(r=>r[2])])]};
   const event={id:job.id,action:'import',type:'wms',at,user:job.requestedBy,role:'Descargador WMS',trigger:job.trigger,file,rows:body.rows.length,previous:data.wms.length,source:WMS_PRODUCTION_URL};
-  save_({...data,wms:body.rows,meta,revision:data.revision+1,events:[...data.events,event]},data);
+  const checkpoint=preserveAutomaticClosures(data,body.rows,at);
+  save_({...data,wms:body.rows,cases:checkpoint.cases,meta,revision:data.revision+1,events:[...checkpoint.events,event]},data);
  }
  job.status='done';job.stage='Stock actualizado';job.finishedAt=new Date(now).toISOString();sync.lastSuccessAt=job.finishedAt;sync.lastRows=body.rows.length;sync.lastError=null;syncSave_(sync);
  return {ok:true,rows:body.rows.length,jobId:job.id};

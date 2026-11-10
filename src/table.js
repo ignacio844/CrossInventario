@@ -32,8 +32,9 @@ export function reviewState(row) {
   if(row.kind&&row.kind!=='Coincide')issues.push(row.kind==='No figura en fuentes'?'Sin registro en este grupo':row.kind);
   if(row.locationMatches===false)issues.push(row.mapped===false?'Sin cross':'Ubicación distinta');
   if(row.saleUnit===null)issues.push('Sin unidad de venta');
-  const observation=done?(row.delta!==0?'Diferencia aceptada':issues.length?'Observación aceptada':'Sin diferencias'):(issues[0]||'Por revisar');
-  return {pendingDelta:done?0:row.delta,observation,issues,needsAnalysis:!!row.active&&!done,acceptedDifference:done&&row.delta!==0};
+  const reviewedDelta=row.reviewedDelta===undefined?row.delta:row.reviewedDelta;
+  const observation=done?(row.closurePreserved?(reviewedDelta===null?'Cierre conservado':reviewedDelta!==0?'Diferencia aceptada':'Inventario confirmado'):reviewedDelta!==0?'Diferencia aceptada':issues.length?'Observación aceptada':'Sin diferencias'):(issues[0]||'Por revisar');
+  return {pendingDelta:done?0:row.delta,observation,issues,needsAnalysis:!!row.active&&!done,acceptedDifference:done&&reviewedDelta!==null&&reviewedDelta!==0};
 }
 
 export function matchesReviewFilter(row,filter) {
@@ -42,6 +43,7 @@ export function matchesReviewFilter(row,filter) {
     case 'analysis': return state.needsAnalysis;
     case 'different': return state.needsAnalysis&&row.delta!==0;
     case 'accepted': return state.acceptedDifference;
+    case 'post-review': return !!row.closurePreserved;
     case 'mapping': return state.needsAnalysis&&(!row.mapped||row.locationMatches===false);
     case 'unit': return row.saleUnit===null;
     case 'recorded': return !!row.review?.updatedAt||!!row.review?.note;

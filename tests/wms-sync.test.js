@@ -77,3 +77,15 @@ test('una configuración histórica de cinco minutos adopta el nuevo intervalo s
  const first=s.worker('worker-poll');s.worker('worker-complete',s.payload(first.job));
  s.clock.now+=300000;assert.equal(s.worker('worker-poll').job,null);
 });
+
+test('la descarga guarda el cierre automático anterior junto al stock nuevo y su auditoría',()=>{
+ const s=setup();
+ s.context.data.cross=[['A 001 02','OLD']];s.context.data.products=[['NEW','Artículo',1]];
+ s.context.data.octosis=[['NEW',7,'OLD','DISTRIMAR B']];s.context.data.wms=[['NEW',7,'A 001 02','','CONT',7,'Artículo']];
+ const {job}=s.worker('worker-poll'),payload=s.payload(job);payload.rows=[['NEW',5,'A 001 02','','CONT',5,'Artículo']];
+ s.worker('worker-complete',payload);
+ const current=s.call("reconcile(data).rows.find(row=>row.sku==='NEW')");
+ assert.equal(current.status,'Resuelto automáticamente');assert.equal(current.closurePreserved,true);assert.equal(current.review.snapshot.wmsQty,7);assert.equal(current.wmsQty,5);
+ assert.equal(s.context.data.events.filter(event=>event.action==='auto-resolve').length,1);assert.equal(s.context.data.events.filter(event=>event.action==='import').length,1);
+ s.worker('worker-complete',payload);assert.equal(s.context.saves,1);
+});

@@ -18,7 +18,7 @@ test('una corrección a cero conserva el caso, su observación y el historial au
  const retained=reconcile(next).rows.find(value=>value.id===row.id);
  assert.ok(retained);assert.equal(retained.historicalOnly,true);assert.equal(retained.wmsPresent,false);assert.equal(retained.oldPresent,false);
  assert.equal(retained.oldQty,0);assert.equal(retained.wmsQty,0);assert.equal(retained.kind,'No figura en fuentes');
- assert.equal(retained.status,'Revisar cambio');assert.equal(retained.review.status,'Aceptado');assert.equal(retained.review.reason,'Control físico realizado');
+ assert.equal(retained.status,'Aceptado');assert.equal(retained.closurePreserved,true);assert.equal(retained.review.status,'Aceptado');assert.equal(retained.review.reason,'Control físico realizado');
  assert.equal(retained.review.snapshot.wmsQty,12);assert.equal(next.events.length,1);
  assert.deepEqual(retained.wmsDetails,[]);assert.ok(retained.crossOriginalLocations.every(position=>source.cross.some(link=>link[1]===position)));
  assert.equal(reconcile(next).rows.filter(value=>value.id===row.id).length,1);

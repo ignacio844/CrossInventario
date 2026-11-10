@@ -8,7 +8,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import {createStorage} from './storage.js';
 import {parseWorkbook} from './imports.js';
-import {C3_EMAILS,applyAction,reconcile,actionReceipt} from '../src/domain.js';
+import {C3_EMAILS,applyAction,reconcile,actionReceipt,preserveAutomaticClosures} from '../src/domain.js';
 const base=path.dirname(path.dirname(fileURLToPath(import.meta.url)));process.chdir(base);
 const mode=process.env.DATA_MODE||'demo';const storage=await createStorage(mode);let state=await storage.load();let cache;
 const app=express();app.disable('x-powered-by');app.use(express.json({limit:'2mb'}));
@@ -41,7 +41,7 @@ app.post('/api/import/preview',upload.single('file'),async(req,res,next)=>{try{
 app.post('/api/import/commit',async(req,res,next)=>{try{
   await serialized(async()=>{const p=pending.get(req.body.id);if(!p||p.user!==req.user.email||Date.now()-p.at>900000)throw new Error('La vista previa venció. Seleccioná el archivo nuevamente.');if(state.revision!==p.revision)throw Object.assign(new Error('Los datos cambiaron. Volvé a validar el archivo antes de importarlo.'),{status:409});
     const now=new Date().toISOString(),id=crypto.randomUUID();const meta={...state.meta,[`${p.type}File`]:p.file,[`${p.type}ImportedAt`]:now};if(p.type==='wms'){meta.importedAt=now;meta.importId=id;meta.wmsCapturedAt=null;meta.seenWmsPositions=[...new Set([...(state.meta.seenWmsPositions??[]),...state.wms.map(r=>r[2]),...p.rows.map(r=>r[2])])];}
-    const next={...state,[p.type]:p.rows,meta,revision:state.revision+1,events:[...state.events,{id,action:'import',type:p.type,at:now,user:req.user.email,role:req.user.role,file:p.file,rows:p.rows.length,previous:state[p.type].length,warningCount:p.warnings.length}]};await storage.save(next,state);state=next;pending.delete(req.body.id);
+    const checkpoint=p.type==='wms'?preserveAutomaticClosures(state,p.rows,now):state;const next={...state,[p.type]:p.rows,cases:checkpoint.cases,meta,revision:state.revision+1,events:[...checkpoint.events,{id,action:'import',type:p.type,at:now,user:req.user.email,role:req.user.role,file:p.file,rows:p.rows.length,previous:state[p.type].length,warningCount:p.warnings.length}]};await storage.save(next,state);state=next;pending.delete(req.body.id);
   });res.json({...snapshot(),user:req.user});
 }catch(e){next(e);}});
 app.use('/api',(req,res)=>res.status(404).json({error:'Operación no disponible.'}));

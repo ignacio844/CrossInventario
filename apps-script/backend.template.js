@@ -60,8 +60,12 @@ function save_(next,previous){
   if((grid.rowCount||0)<size||(grid.columnCount||0)<10)requests.push({updateSheetProperties:{properties:{sheetId,gridProperties:{rowCount:Math.max(size,grid.rowCount||0,1000),columnCount:Math.max(10,grid.columnCount||0)}},fields:'gridProperties.rowCount,gridProperties.columnCount'}});
   const cells=rs=>rs.map(r=>({values:r.map(v=>({userEnteredValue:typeof v==='number'?{numberValue:v}:{stringValue:String(v??'')}}))}));
   if(k==='cases'){
-   const indices=new Map(Object.keys(previous.cases).map((id,index)=>[id,index]));let append=indices.size;
-   for(const [id,value] of Object.entries(next.cases))if(value!==previous.cases[id])requests.push({updateCells:{start:{sheetId,rowIndex:indices.has(id)?indices.get(id):append++,columnIndex:0},rows:cells([[id,JSON.stringify(value)]]),fields:'userEnteredValue'}});
+   const indices=new Map(Object.keys(previous.cases).map((id,index)=>[id,index])),appended=[];
+   for(const [id,value] of Object.entries(next.cases))if(value!==previous.cases[id]){
+    if(indices.has(id))requests.push({updateCells:{start:{sheetId,rowIndex:indices.get(id),columnIndex:0},rows:cells([[id,JSON.stringify(value)]]),fields:'userEnteredValue'}});
+    else appended.push([id,JSON.stringify(value)]);
+   }
+   if(appended.length)requests.push({updateCells:{start:{sheetId,rowIndex:indices.size,columnIndex:0},rows:cells(appended),fields:'userEnteredValue'}});
   }
   else if(k==='meta'&&next.meta===previous.meta&&previous.controlV2!==false)requests.push({updateCells:{start:{sheetId,rowIndex:0,columnIndex:1},rows:cells([[next.revision]]),fields:'userEnteredValue'}});
   else if(k==='events')requests.push({appendCells:{sheetId,rows:cells(rows.slice(previous.events.length)),fields:'userEnteredValue'}});
@@ -113,7 +117,8 @@ function doPost(e){
    if(data.revision!==body.expectedRevision)fail_('Otro usuario actualizó los datos. Validá el archivo nuevamente.',409);
    const now=new Date().toISOString(),file=String(body.file||'archivo.xlsx').slice(0,255),meta={...data.meta,[body.type+'File']:file,[body.type+'ImportedAt']:now};
    if(body.type==='wms'){meta.importId=body.requestId;meta.importedAt=now;meta.wmsCapturedAt=null;meta.seenWmsPositions=[...new Set([...(data.meta.seenWmsPositions||[]),...data.wms.map(r=>r[2]),...body.rows.map(r=>r[2])])];}
-   next={...data,[body.type]:body.rows,meta,revision:data.revision+1,events:[...data.events,{id:body.requestId,action:'import',type:body.type,at:now,user:user.email,role:user.role,file,rows:body.rows.length,previous:data[body.type].length}]};
+   const checkpoint=body.type==='wms'?preserveAutomaticClosures(data,body.rows,now):data;
+   next={...data,[body.type]:body.rows,cases:checkpoint.cases,meta,revision:data.revision+1,events:[...checkpoint.events,{id:body.requestId,action:'import',type:body.type,at:now,user:user.email,role:user.role,file,rows:body.rows.length,previous:data[body.type].length}]};
   }else fail_('Operación desconocida.',404);
   if(next!==data)save_(next,data);
   lock.releaseLock();lock=null;

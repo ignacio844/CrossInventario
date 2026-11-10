@@ -5,6 +5,19 @@ const octKey = value => String(value??'').toUpperCase().replace(/\s+/g,'');
 const octPositionKey = value => String(value??'').normalize('NFKC').trim().toUpperCase().replace(/\s+/g,' ').replace(/\s*\/\s*/g,'/');
 const wmsKey = value => String(value??'').trim().toUpperCase().replace(/\//g,' ').replace(/\s+/g,' ');
 function fingerprint(value) { let hash=2166136261; for(const c of JSON.stringify(value)){ hash ^= c.charCodeAt(0); hash=Math.imul(hash,16777619); } return (hash>>>0).toString(36); }
+const CLOSED_STATUSES=['Aceptado','Aceptado C3','Verificado','Verificado C3','Resuelto automáticamente'];
+const positionSet=values=>[...new Set((values||[]).map(octPositionKey))].sort();
+function closureReferenceMatches(row,saved,meta){
+  if(!CLOSED_STATUSES.includes(saved?.status))return false;
+  if(saved.referenceFingerprint)return saved.referenceFingerprint===row.referenceFingerprint;
+  // Older decisions have no reference hash. Restore them only while their
+  // reference imports and any saved Octosis quantities/positions still agree.
+  const at=Date.parse(saved.updatedAt);if(!Number.isFinite(at))return !row.changed;
+  if(['octosisImportedAt','crossImportedAt','productsImportedAt'].some(key=>Date.parse(meta[key])>at))return false;
+  const snapshot=saved.snapshot;
+  if(snapshot&&(snapshot.oldQty!==row.oldQty||JSON.stringify(positionSet(snapshot.originalPositions))!==JSON.stringify(positionSet(row.oldDetails.map(detail=>detail.position)))))return false;
+  return true;
+}
 function reconcile(data) {
   const parent=new Map();
   function root(x){ if(!parent.has(x))parent.set(x,x); if(parent.get(x)!==x)parent.set(x,root(parent.get(x))); return parent.get(x); }
@@ -44,11 +57,17 @@ function reconcile(data) {
     r.expectedPositions=[...new Set(r.oldDetails.flatMap(d=>[...(oldLinks.get(octPositionKey(d.position))||[])]))].sort();
     r.locationMatches=!r.wmsPresent?null:!r.mapped?false:r.oldPresent?r.wmsDetails.every(d=>r.expectedPositions.includes(wmsKey(d.position))):r.wmsDetails.every(d=>reverseLinks.has(wmsKey(d.position)));
     r.fingerprint=fingerprint([r.oldDetails.slice().sort((a,b)=>JSON.stringify(a).localeCompare(JSON.stringify(b))),r.wmsDetails.slice().sort((a,b)=>JSON.stringify(a).localeCompare(JSON.stringify(b))),r.positions,r.oldPositions,r.saleUnit]);
+    r.referenceFingerprint=fingerprint([r.oldDetails.slice().sort((a,b)=>JSON.stringify(a).localeCompare(JSON.stringify(b))),r.positions,r.oldPositions,r.saleUnit]);
     const saved=data.cases[r.id];r.review=saved??{};r.caseVersion=JSON.stringify([r.fingerprint,saved?.decisionRevision||0,saved?.status||null,saved?.fingerprint||null,saved?.updatedAt||null,saved?.updatedBy||null]);r.changed=!!saved?.fingerprint&&saved.fingerprint!==r.fingerprint;
-    r.status=r.changed?'Revisar cambio':saved?.status??(r.active?'Pendiente':'Sin carga WMS');
+    r.closurePreserved=r.changed&&closureReferenceMatches(r,saved,data.meta);
+    // A new WMS destination is a location change, not merely a quantity change.
+    if(r.closurePreserved&&saved.snapshot?.wmsPositions&&r.wmsDetails.some(detail=>!saved.snapshot.wmsPositions.map(wmsKey).includes(wmsKey(detail.position))))r.closurePreserved=false;
+    r.reviewedDelta=Number.isFinite(saved?.snapshot?.wmsQty)&&Number.isFinite(saved?.snapshot?.oldQty)?saved.snapshot.wmsQty-saved.snapshot.oldQty:(!r.changed?r.delta:null);
+    r.postReviewDelta=r.closurePreserved&&r.wmsPresent&&Number.isFinite(saved?.snapshot?.wmsQty)?r.wmsQty-saved.snapshot.wmsQty:null;
+    r.status=r.changed&&!r.closurePreserved?'Revisar cambio':saved?.status??(r.active?'Pendiente':'Sin carga WMS');
     if(saved?.status==='Ajustado en WMS'&&r.changed)r.status='Verificar ajuste';
     const pendingAdjustment=saved?.status==='Ajustado en WMS'&&(r.wmsQty!==saved.targetQuantity||data.meta.importId===saved.adjustmentImportId||data.meta.wmsCapturedAt&&Date.parse(data.meta.wmsCapturedAt)<=Date.parse(saved.adjustmentAt||saved.updatedAt));
-    r.autoResolved=r.kind==='Coincide'&&r.locationMatches===true&&!pendingAdjustment;
+    r.autoResolved=r.kind==='Coincide'&&r.locationMatches===true&&!pendingAdjustment&&!CLOSED_STATUSES.includes(saved?.status)&&saved?.lastAction!=='reopen';
     if(r.autoResolved)r.status='Resuelto automáticamente';
     return r;
   });
@@ -58,7 +77,7 @@ function reconcile(data) {
   rows.sort((a,b)=>Number(b.active)-Number(a.active)||(a.positions[0]||'').localeCompare(b.positions[0]||'',undefined,{numeric:true})||a.sku.localeCompare(b.sku));
   return {rows,stats:{activeGroups:active.size,records:rows.filter(r=>r.active).length,missingUnits:rows.filter(r=>r.saleUnit==null).length,unmapped:rows.filter(r=>!r.mapped).length,ambiguousOld:[...oldLinks.values()].filter(s=>s.size>1).length},revision:data.revision,meta:data.meta};
 }
-const isResolved = row => ['Aceptado','Aceptado C3','Verificado','Verificado C3','Resuelto automáticamente'].includes(row.status);
+const isResolved = row => CLOSED_STATUSES.includes(row.status);
 function requiresReason(row,action){return action!=='note'&&!(action==='accept'&&row.kind==='Coincide'&&row.locationMatches===true);}
 function applyAction(data,{id,action,reason,quantity,message,expectedRevision,expectedCaseVersion,requestId},user,now=new Date().toISOString()){
   if(!user?.email)throw new Error('Iniciá sesión para guardar.');
@@ -91,7 +110,7 @@ function applyAction(data,{id,action,reason,quantity,message,expectedRevision,ex
   }
   const previous=data.cases[id]??null;
   const eventId=requestId||crypto.randomUUID();
-  const next={...previous,status:actions[action],decisionRevision:(previous?.decisionRevision||0)+1,reason:reason.trim(),updatedAt:now,updatedBy:user.email,fingerprint:row.fingerprint,lastAction:action,lastRequestId:eventId,snapshot:{importId:data.meta.importId,wmsFile:data.meta.wmsFile,wmsCapturedAt:data.meta.wmsCapturedAt||data.meta.importedAt,wmsQty:row.wmsQty,oldQty:row.oldQty,wmsPresent:row.wmsPresent,wmsPositions:row.wmsDetails.map(detail=>detail.position),originalPositions:row.oldDetails.map(detail=>detail.position)}};
+  const next={...previous,status:actions[action],decisionRevision:(previous?.decisionRevision||0)+1,reason:reason.trim(),updatedAt:now,updatedBy:user.email,fingerprint:row.fingerprint,referenceFingerprint:row.referenceFingerprint,lastAction:action,lastRequestId:eventId,snapshot:{importId:data.meta.importId,wmsFile:data.meta.wmsFile,wmsCapturedAt:data.meta.wmsCapturedAt||data.meta.importedAt,wmsQty:row.wmsQty,oldQty:row.oldQty,wmsPresent:row.wmsPresent,wmsPositions:row.wmsDetails.map(detail=>detail.position),originalPositions:row.oldDetails.map(detail=>detail.position)}};
   if(action==='record-c2')next.c2={quantity,by:user.email,at:now,note:reason.trim()};
   if(action==='adjust'){next.targetQuantity=quantity;next.adjustmentImportId=data.meta.importId;next.adjustmentAt=now;}
   const event={id:eventId,requestId,caseId:id,sku:row.sku,action,at:now,user:user.email,role:user.role,before:previous,after:next,wmsQty:row.wmsQty,oldQty:row.oldQty,source:data.meta.wmsFile,importId:data.meta.importId};
@@ -102,6 +121,21 @@ function actionReceipt(data,payload){
   const event=data.events.find(event=>event.id===payload.requestId);
   if(!event)throw Object.assign(new Error('No se pudo confirmar el registro de la acción. Tu texto se conserva; reintentá el guardado.'),{status:502,code:'UNCONFIRMED_ACTION'});
   return {confirmed:true,requestId:payload.requestId,caseId:payload.id,action:payload.action,revision:data.revision};
+}
+
+// Checkpoint only automatic matches that would stop matching in this import.
+// Existing manual decisions, C2 work and explicit reopens are never replaced.
+function preserveAutomaticClosures(data,incomingWms,now=new Date().toISOString()){
+  const after=new Map(reconcile({...data,wms:incomingWms}).rows.map(row=>[row.id,row]));
+  const candidates=reconcile(data).rows.filter(row=>row.autoResolved&&!row.review.status&&!after.get(row.id)?.autoResolved);
+  if(!candidates.length)return data;
+  const cases={...data.cases},events=[...data.events];
+  for(const row of candidates){
+    const id='auto:'+row.id+':'+String(data.meta.importId||row.fingerprint);
+    const saved={...row.review,status:'Resuelto automáticamente',decisionRevision:(row.review.decisionRevision||0)+1,reason:'Cantidad y ubicación coincidían antes de esta actualización WMS.',updatedAt:now,updatedBy:'Sistema',fingerprint:row.fingerprint,referenceFingerprint:row.referenceFingerprint,lastAction:'auto-resolve',lastRequestId:id,snapshot:{importId:data.meta.importId,wmsFile:data.meta.wmsFile,wmsCapturedAt:data.meta.wmsCapturedAt||data.meta.importedAt,wmsQty:row.wmsQty,oldQty:row.oldQty,wmsPresent:row.wmsPresent,wmsPositions:row.wmsDetails.map(detail=>detail.position),originalPositions:row.oldDetails.map(detail=>detail.position)}};
+    cases[row.id]=saved;events.push({id,caseId:row.id,sku:row.sku,action:'auto-resolve',at:now,user:'Sistema',role:'Automático',after:saved,wmsQty:row.wmsQty,oldQty:row.oldQty,source:data.meta.wmsFile,importId:data.meta.importId});
+  }
+  return {...data,cases,events};
 }
 
 const SHEET_ID='1shb3TKCLMoIcnXMI0iViCq7HjGSeBvK-MoXyZSIvqig';
@@ -166,8 +200,12 @@ function save_(next,previous){
   if((grid.rowCount||0)<size||(grid.columnCount||0)<10)requests.push({updateSheetProperties:{properties:{sheetId,gridProperties:{rowCount:Math.max(size,grid.rowCount||0,1000),columnCount:Math.max(10,grid.columnCount||0)}},fields:'gridProperties.rowCount,gridProperties.columnCount'}});
   const cells=rs=>rs.map(r=>({values:r.map(v=>({userEnteredValue:typeof v==='number'?{numberValue:v}:{stringValue:String(v??'')}}))}));
   if(k==='cases'){
-   const indices=new Map(Object.keys(previous.cases).map((id,index)=>[id,index]));let append=indices.size;
-   for(const [id,value] of Object.entries(next.cases))if(value!==previous.cases[id])requests.push({updateCells:{start:{sheetId,rowIndex:indices.has(id)?indices.get(id):append++,columnIndex:0},rows:cells([[id,JSON.stringify(value)]]),fields:'userEnteredValue'}});
+   const indices=new Map(Object.keys(previous.cases).map((id,index)=>[id,index])),appended=[];
+   for(const [id,value] of Object.entries(next.cases))if(value!==previous.cases[id]){
+    if(indices.has(id))requests.push({updateCells:{start:{sheetId,rowIndex:indices.get(id),columnIndex:0},rows:cells([[id,JSON.stringify(value)]]),fields:'userEnteredValue'}});
+    else appended.push([id,JSON.stringify(value)]);
+   }
+   if(appended.length)requests.push({updateCells:{start:{sheetId,rowIndex:indices.size,columnIndex:0},rows:cells(appended),fields:'userEnteredValue'}});
   }
   else if(k==='meta'&&next.meta===previous.meta&&previous.controlV2!==false)requests.push({updateCells:{start:{sheetId,rowIndex:0,columnIndex:1},rows:cells([[next.revision]]),fields:'userEnteredValue'}});
   else if(k==='events')requests.push({appendCells:{sheetId,rows:cells(rows.slice(previous.events.length)),fields:'userEnteredValue'}});
@@ -219,7 +257,8 @@ function doPost(e){
    if(data.revision!==body.expectedRevision)fail_('Otro usuario actualizó los datos. Validá el archivo nuevamente.',409);
    const now=new Date().toISOString(),file=String(body.file||'archivo.xlsx').slice(0,255),meta={...data.meta,[body.type+'File']:file,[body.type+'ImportedAt']:now};
    if(body.type==='wms'){meta.importId=body.requestId;meta.importedAt=now;meta.wmsCapturedAt=null;meta.seenWmsPositions=[...new Set([...(data.meta.seenWmsPositions||[]),...data.wms.map(r=>r[2]),...body.rows.map(r=>r[2])])];}
-   next={...data,[body.type]:body.rows,meta,revision:data.revision+1,events:[...data.events,{id:body.requestId,action:'import',type:body.type,at:now,user:user.email,role:user.role,file,rows:body.rows.length,previous:data[body.type].length}]};
+   const checkpoint=body.type==='wms'?preserveAutomaticClosures(data,body.rows,now):data;
+   next={...data,[body.type]:body.rows,cases:checkpoint.cases,meta,revision:data.revision+1,events:[...checkpoint.events,{id:body.requestId,action:'import',type:body.type,at:now,user:user.email,role:user.role,file,rows:body.rows.length,previous:data[body.type].length}]};
   }else fail_('Operación desconocida.',404);
   if(next!==data)save_(next,data);
   lock.releaseLock();lock=null;
@@ -363,7 +402,8 @@ function syncWorker_(input){return syncLock_(()=>{
   if((data.meta.importId||null)!==job.baseImportId){job.status='error';job.error='Se importó otro stock mientras se descargaba. Pedí una nueva descarga.';job.finishedAt=new Date(now).toISOString();sync.lastError=job.error;syncSave_(sync);fail_(job.error,409);}
   const at=new Date(now).toISOString(),file=String(body.file||'TC_Stock.xlsx').slice(0,255),meta={...data.meta,wmsFile:file,wmsImportedAt:at,importedAt:at,wmsCapturedAt:body.capturedAt,importId:job.id,wmsProductionUrl:WMS_PRODUCTION_URL,seenWmsPositions:[...new Set([...(data.meta.seenWmsPositions||[]),...data.wms.map(r=>r[2]),...body.rows.map(r=>r[2])])]};
   const event={id:job.id,action:'import',type:'wms',at,user:job.requestedBy,role:'Descargador WMS',trigger:job.trigger,file,rows:body.rows.length,previous:data.wms.length,source:WMS_PRODUCTION_URL};
-  save_({...data,wms:body.rows,meta,revision:data.revision+1,events:[...data.events,event]},data);
+  const checkpoint=preserveAutomaticClosures(data,body.rows,at);
+  save_({...data,wms:body.rows,cases:checkpoint.cases,meta,revision:data.revision+1,events:[...checkpoint.events,event]},data);
  }
  job.status='done';job.stage='Stock actualizado';job.finishedAt=new Date(now).toISOString();sync.lastSuccessAt=job.finishedAt;sync.lastRows=body.rows.length;sync.lastError=null;syncSave_(sync);
  return {ok:true,rows:body.rows.length,jobId:job.id};

@@ -4,6 +4,19 @@ export const octKey = value => String(value??'').toUpperCase().replace(/\s+/g,''
 export const octPositionKey = value => String(value??'').normalize('NFKC').trim().toUpperCase().replace(/\s+/g,' ').replace(/\s*\/\s*/g,'/');
 export const wmsKey = value => String(value??'').trim().toUpperCase().replace(/\//g,' ').replace(/\s+/g,' ');
 export function fingerprint(value) { let hash=2166136261; for(const c of JSON.stringify(value)){ hash ^= c.charCodeAt(0); hash=Math.imul(hash,16777619); } return (hash>>>0).toString(36); }
+const CLOSED_STATUSES=['Aceptado','Aceptado C3','Verificado','Verificado C3','Resuelto automáticamente'];
+const positionSet=values=>[...new Set((values||[]).map(octPositionKey))].sort();
+function closureReferenceMatches(row,saved,meta){
+  if(!CLOSED_STATUSES.includes(saved?.status))return false;
+  if(saved.referenceFingerprint)return saved.referenceFingerprint===row.referenceFingerprint;
+  // Older decisions have no reference hash. Restore them only while their
+  // reference imports and any saved Octosis quantities/positions still agree.
+  const at=Date.parse(saved.updatedAt);if(!Number.isFinite(at))return !row.changed;
+  if(['octosisImportedAt','crossImportedAt','productsImportedAt'].some(key=>Date.parse(meta[key])>at))return false;
+  const snapshot=saved.snapshot;
+  if(snapshot&&(snapshot.oldQty!==row.oldQty||JSON.stringify(positionSet(snapshot.originalPositions))!==JSON.stringify(positionSet(row.oldDetails.map(detail=>detail.position)))))return false;
+  return true;
+}
 export function reconcile(data) {
   const parent=new Map();
   function root(x){ if(!parent.has(x))parent.set(x,x); if(parent.get(x)!==x)parent.set(x,root(parent.get(x))); return parent.get(x); }
@@ -43,11 +56,17 @@ export function reconcile(data) {
     r.expectedPositions=[...new Set(r.oldDetails.flatMap(d=>[...(oldLinks.get(octPositionKey(d.position))||[])]))].sort();
     r.locationMatches=!r.wmsPresent?null:!r.mapped?false:r.oldPresent?r.wmsDetails.every(d=>r.expectedPositions.includes(wmsKey(d.position))):r.wmsDetails.every(d=>reverseLinks.has(wmsKey(d.position)));
     r.fingerprint=fingerprint([r.oldDetails.slice().sort((a,b)=>JSON.stringify(a).localeCompare(JSON.stringify(b))),r.wmsDetails.slice().sort((a,b)=>JSON.stringify(a).localeCompare(JSON.stringify(b))),r.positions,r.oldPositions,r.saleUnit]);
+    r.referenceFingerprint=fingerprint([r.oldDetails.slice().sort((a,b)=>JSON.stringify(a).localeCompare(JSON.stringify(b))),r.positions,r.oldPositions,r.saleUnit]);
     const saved=data.cases[r.id];r.review=saved??{};r.caseVersion=JSON.stringify([r.fingerprint,saved?.decisionRevision||0,saved?.status||null,saved?.fingerprint||null,saved?.updatedAt||null,saved?.updatedBy||null]);r.changed=!!saved?.fingerprint&&saved.fingerprint!==r.fingerprint;
-    r.status=r.changed?'Revisar cambio':saved?.status??(r.active?'Pendiente':'Sin carga WMS');
+    r.closurePreserved=r.changed&&closureReferenceMatches(r,saved,data.meta);
+    // A new WMS destination is a location change, not merely a quantity change.
+    if(r.closurePreserved&&saved.snapshot?.wmsPositions&&r.wmsDetails.some(detail=>!saved.snapshot.wmsPositions.map(wmsKey).includes(wmsKey(detail.position))))r.closurePreserved=false;
+    r.reviewedDelta=Number.isFinite(saved?.snapshot?.wmsQty)&&Number.isFinite(saved?.snapshot?.oldQty)?saved.snapshot.wmsQty-saved.snapshot.oldQty:(!r.changed?r.delta:null);
+    r.postReviewDelta=r.closurePreserved&&r.wmsPresent&&Number.isFinite(saved?.snapshot?.wmsQty)?r.wmsQty-saved.snapshot.wmsQty:null;
+    r.status=r.changed&&!r.closurePreserved?'Revisar cambio':saved?.status??(r.active?'Pendiente':'Sin carga WMS');
     if(saved?.status==='Ajustado en WMS'&&r.changed)r.status='Verificar ajuste';
     const pendingAdjustment=saved?.status==='Ajustado en WMS'&&(r.wmsQty!==saved.targetQuantity||data.meta.importId===saved.adjustmentImportId||data.meta.wmsCapturedAt&&Date.parse(data.meta.wmsCapturedAt)<=Date.parse(saved.adjustmentAt||saved.updatedAt));
-    r.autoResolved=r.kind==='Coincide'&&r.locationMatches===true&&!pendingAdjustment;
+    r.autoResolved=r.kind==='Coincide'&&r.locationMatches===true&&!pendingAdjustment&&!CLOSED_STATUSES.includes(saved?.status)&&saved?.lastAction!=='reopen';
     if(r.autoResolved)r.status='Resuelto automáticamente';
     return r;
   });
@@ -57,7 +76,7 @@ export function reconcile(data) {
   rows.sort((a,b)=>Number(b.active)-Number(a.active)||(a.positions[0]||'').localeCompare(b.positions[0]||'',undefined,{numeric:true})||a.sku.localeCompare(b.sku));
   return {rows,stats:{activeGroups:active.size,records:rows.filter(r=>r.active).length,missingUnits:rows.filter(r=>r.saleUnit==null).length,unmapped:rows.filter(r=>!r.mapped).length,ambiguousOld:[...oldLinks.values()].filter(s=>s.size>1).length},revision:data.revision,meta:data.meta};
 }
-export const isResolved = row => ['Aceptado','Aceptado C3','Verificado','Verificado C3','Resuelto automáticamente'].includes(row.status);
+export const isResolved = row => CLOSED_STATUSES.includes(row.status);
 export function requiresReason(row,action){return action!=='note'&&!(action==='accept'&&row.kind==='Coincide'&&row.locationMatches===true);}
 export function applyAction(data,{id,action,reason,quantity,message,expectedRevision,expectedCaseVersion,requestId},user,now=new Date().toISOString()){
   if(!user?.email)throw new Error('Iniciá sesión para guardar.');
@@ -90,7 +109,7 @@ export function applyAction(data,{id,action,reason,quantity,message,expectedRevi
   }
   const previous=data.cases[id]??null;
   const eventId=requestId||crypto.randomUUID();
-  const next={...previous,status:actions[action],decisionRevision:(previous?.decisionRevision||0)+1,reason:reason.trim(),updatedAt:now,updatedBy:user.email,fingerprint:row.fingerprint,lastAction:action,lastRequestId:eventId,snapshot:{importId:data.meta.importId,wmsFile:data.meta.wmsFile,wmsCapturedAt:data.meta.wmsCapturedAt||data.meta.importedAt,wmsQty:row.wmsQty,oldQty:row.oldQty,wmsPresent:row.wmsPresent,wmsPositions:row.wmsDetails.map(detail=>detail.position),originalPositions:row.oldDetails.map(detail=>detail.position)}};
+  const next={...previous,status:actions[action],decisionRevision:(previous?.decisionRevision||0)+1,reason:reason.trim(),updatedAt:now,updatedBy:user.email,fingerprint:row.fingerprint,referenceFingerprint:row.referenceFingerprint,lastAction:action,lastRequestId:eventId,snapshot:{importId:data.meta.importId,wmsFile:data.meta.wmsFile,wmsCapturedAt:data.meta.wmsCapturedAt||data.meta.importedAt,wmsQty:row.wmsQty,oldQty:row.oldQty,wmsPresent:row.wmsPresent,wmsPositions:row.wmsDetails.map(detail=>detail.position),originalPositions:row.oldDetails.map(detail=>detail.position)}};
   if(action==='record-c2')next.c2={quantity,by:user.email,at:now,note:reason.trim()};
   if(action==='adjust'){next.targetQuantity=quantity;next.adjustmentImportId=data.meta.importId;next.adjustmentAt=now;}
   const event={id:eventId,requestId,caseId:id,sku:row.sku,action,at:now,user:user.email,role:user.role,before:previous,after:next,wmsQty:row.wmsQty,oldQty:row.oldQty,source:data.meta.wmsFile,importId:data.meta.importId};
@@ -101,4 +120,19 @@ export function actionReceipt(data,payload){
   const event=data.events.find(event=>event.id===payload.requestId);
   if(!event)throw Object.assign(new Error('No se pudo confirmar el registro de la acción. Tu texto se conserva; reintentá el guardado.'),{status:502,code:'UNCONFIRMED_ACTION'});
   return {confirmed:true,requestId:payload.requestId,caseId:payload.id,action:payload.action,revision:data.revision};
+}
+
+// Checkpoint only automatic matches that would stop matching in this import.
+// Existing manual decisions, C2 work and explicit reopens are never replaced.
+export function preserveAutomaticClosures(data,incomingWms,now=new Date().toISOString()){
+  const after=new Map(reconcile({...data,wms:incomingWms}).rows.map(row=>[row.id,row]));
+  const candidates=reconcile(data).rows.filter(row=>row.autoResolved&&!row.review.status&&!after.get(row.id)?.autoResolved);
+  if(!candidates.length)return data;
+  const cases={...data.cases},events=[...data.events];
+  for(const row of candidates){
+    const id='auto:'+row.id+':'+String(data.meta.importId||row.fingerprint);
+    const saved={...row.review,status:'Resuelto automáticamente',decisionRevision:(row.review.decisionRevision||0)+1,reason:'Cantidad y ubicación coincidían antes de esta actualización WMS.',updatedAt:now,updatedBy:'Sistema',fingerprint:row.fingerprint,referenceFingerprint:row.referenceFingerprint,lastAction:'auto-resolve',lastRequestId:id,snapshot:{importId:data.meta.importId,wmsFile:data.meta.wmsFile,wmsCapturedAt:data.meta.wmsCapturedAt||data.meta.importedAt,wmsQty:row.wmsQty,oldQty:row.oldQty,wmsPresent:row.wmsPresent,wmsPositions:row.wmsDetails.map(detail=>detail.position),originalPositions:row.oldDetails.map(detail=>detail.position)}};
+    cases[row.id]=saved;events.push({id,caseId:row.id,sku:row.sku,action:'auto-resolve',at:now,user:'Sistema',role:'Automático',after:saved,wmsQty:row.wmsQty,oldQty:row.oldQty,source:data.meta.wmsFile,importId:data.meta.importId});
+  }
+  return {...data,cases,events};
 }
