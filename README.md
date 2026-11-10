@@ -8,6 +8,10 @@ Requiere Node 22 o superior. Instalar con `npm install`, compilar con `npm run b
 
 En `DATA_MODE=demo`, el servidor escucha solamente en la computadora local y guarda los cambios en `data/runtime.json`. Permite probar ambos roles; las acciones quedan identificadas como prueba. No usar ese modo para operación real ni exponerlo a internet.
 
+## Cloudflare y Google Sheets
+
+La migración de alojamiento se publica con `wrangler.jsonc`. Ver **DEPLOY_CLOUDFLARE.md**. Se mantiene la misma planilla y el mismo Apps Script; Cloudflare sirve React y el gateway `/api/*` sin depender de Vercel.
+
 ## Vercel y Google Sheets
 
 Seguir **DEPLOY_VERCEL.md**. Vercel sirve React y una funcion sin estado conecta con Apps Script. Apps Script verifica Google, asigna roles y coordina escrituras concurrentes en Sheets. La planilla inicial ya fue creada con los cuatro archivos. El despliegue lo realiza el usuario; no requiere cuenta de servicio ni clave privada.

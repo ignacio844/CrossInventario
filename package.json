@@ -9,6 +9,7 @@
     "start": "node server/index.js",
     "test": "node --test tests/*.test.js",
     "build:vercel": "vite build --mode vercel",
+    "build:cloudflare": "vite build --mode vercel",
     "build:apps-script": "node scripts/build-apps-script.mjs"
   },
   "dependencies": {

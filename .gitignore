@@ -7,3 +7,4 @@ data/
 .env.wms
 .wms/
 __pycache__/
+.wrangler/
