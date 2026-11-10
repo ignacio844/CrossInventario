@@ -6,7 +6,7 @@ const number=value=>(value>0?'+':'')+new Intl.NumberFormat('es-AR',{maximumFract
 const date=value=>new Intl.DateTimeFormat('es-AR',{dateStyle:'short',timeStyle:'short',timeZone:'America/Argentina/Buenos_Aires'}).format(new Date(value));
 
 export function DeltaValue({row}) {
-  return <><strong className={isResolved(row)?'green':row.needsAnalysis?'amber':''}>{number(row.pendingDelta)}</strong>{row.needsAnalysis&&row.pendingDelta===0&&<small className="pending-control">Ver control</small>}{row.acceptedDifference&&<small className="accepted-delta">Diferencia aceptada al cierre: {number(row.reviewedDelta??row.delta)}</small>}{row.closurePreserved&&<small className="post-review-stock">{row.postReviewDelta===null?'Sin registro WMS actual':'Variación posterior: '+number(row.postReviewDelta)}</small>}</>;
+  return <><strong className={isResolved(row)?'green':row.needsAnalysis?'amber':''}>{number(row.pendingDelta)}</strong>{row.needsAnalysis&&row.pendingDelta===0&&<small className="pending-control">Ver control</small>}{row.acceptedDifference&&<small className="accepted-delta">Diferencia aceptada al cierre: {number(row.reviewedDelta??row.delta)}</small>}{row.closurePreserved&&<small className="post-review-stock">{row.postReviewDelta===null?(row.wmsPresent?'Sin cantidad histórica para calcular la variación':'Sin registro WMS actual'):'Variación posterior: '+number(row.postReviewDelta)}</small>}</>;
 }
 
 export function ControlCell({row,onOpen}) {
@@ -26,7 +26,7 @@ export function LastSavedAction({row}) {
     <small>{review.updatedBy} · {date(review.updatedAt)}</small>
     {review.reason&&<p>{review.reason}</p>}
     {row.changed&&<p className="saved-action-explanation">{row.closurePreserved?'El cierre sigue vigente. Las variaciones posteriores de cantidad WMS se muestran por separado y no se atribuyen automáticamente a picking.':'La acción y su observación siguen guardadas. Cambió la referencia o un caso pendiente y requiere otra revisión.'}</p>}
-    {row.closurePreserved&&review.snapshot&&<p className="saved-action-explanation">Al cierre: Octosis {amount(review.snapshot.oldQty)} · WMS {amount(review.snapshot.wmsQty)}. {row.postReviewDelta!==null?'Variación posterior WMS: '+number(row.postReviewDelta)+'.':'El artículo no figura en la última descarga.'}</p>}
+    {row.closurePreserved&&Number.isFinite(review.snapshot?.oldQty)&&Number.isFinite(review.snapshot?.wmsQty)&&<p className="saved-action-explanation">Al cierre: Octosis {amount(review.snapshot.oldQty)} · WMS {amount(review.snapshot.wmsQty)}. {row.postReviewDelta!==null?'Variación posterior WMS: '+number(row.postReviewDelta)+'.':'El artículo no figura en la última descarga.'}</p>}
   </section>;
 }
 
