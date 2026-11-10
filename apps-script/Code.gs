@@ -303,12 +303,13 @@ function errorResponse_(error){
 
 const WMS_PRODUCTION_URL='https://wms.grupo-aftermarket.com:4446/SGLWMS_DISTRIMAR_PROD/hinicio.aspx';
 const WMS_SYNC_KEY='wms-sync-v1';
-function syncRead_(){const value=PropertiesService.getScriptProperties().getProperty(WMS_SYNC_KEY);return value?JSON.parse(value):{enabled:false,intervalSeconds:300,job:null};}
+const WMS_INTERVAL_SECONDS=15*60;
+function syncRead_(){const value=PropertiesService.getScriptProperties().getProperty(WMS_SYNC_KEY);return {...(value?JSON.parse(value):{enabled:false,job:null}),intervalSeconds:WMS_INTERVAL_SECONDS};}
 function syncSave_(value){PropertiesService.getScriptProperties().setProperty(WMS_SYNC_KEY,JSON.stringify(value));CacheService.getScriptCache().remove(WMS_SYNC_KEY);}
 function syncPublic_(){
  const cache=CacheService.getScriptCache();let saved=cache.get(WMS_SYNC_KEY);
- if(!saved){const value=syncRead_();saved=JSON.stringify({configured:!!PropertiesService.getScriptProperties().getProperty('wms-worker-hash'),enabled:!!value.enabled,intervalSeconds:300,lastHeartbeatAt:value.lastHeartbeatAt||null,lastSuccessAt:value.lastSuccessAt||null,lastRows:value.lastRows||0,lastError:value.lastError||null,job:value.job?{id:value.job.id,status:value.job.status,stage:value.job.stage,requestedAt:value.job.requestedAt,requestedBy:value.job.requestedBy,trigger:value.job.trigger,startedAt:value.job.startedAt,finishedAt:value.job.finishedAt,error:value.job.error}:null});cache.put(WMS_SYNC_KEY,saved,5);}
- const result=JSON.parse(saved);result.connected=!!result.lastHeartbeatAt&&Date.now()-Date.parse(result.lastHeartbeatAt)<60000;result.productionUrl=WMS_PRODUCTION_URL;return result;
+ if(!saved){const value=syncRead_();saved=JSON.stringify({configured:!!PropertiesService.getScriptProperties().getProperty('wms-worker-hash'),enabled:!!value.enabled,intervalSeconds:WMS_INTERVAL_SECONDS,lastHeartbeatAt:value.lastHeartbeatAt||null,lastSuccessAt:value.lastSuccessAt||null,lastRows:value.lastRows||0,lastError:value.lastError||null,job:value.job?{id:value.job.id,status:value.job.status,stage:value.job.stage,requestedAt:value.job.requestedAt,requestedBy:value.job.requestedBy,trigger:value.job.trigger,startedAt:value.job.startedAt,finishedAt:value.job.finishedAt,error:value.job.error}:null});cache.put(WMS_SYNC_KEY,saved,5);}
+ const result=JSON.parse(saved);result.intervalSeconds=WMS_INTERVAL_SECONDS;result.connected=!!result.lastHeartbeatAt&&Date.now()-Date.parse(result.lastHeartbeatAt)<60000;result.productionUrl=WMS_PRODUCTION_URL;return result;
 }
 function syncLock_(fn){const lock=LockService.getScriptLock();if(!lock.tryLock(20000))fail_('Hay otra operación en curso. Reintentá en unos segundos.',429);try{return fn();}finally{lock.releaseLock();}}
 function syncExpire_(sync,now){if(sync.job&&sync.job.status==='running'&&sync.job.leaseUntil<now){sync.job.status='error';sync.job.error='El equipo dejó de responder durante la descarga.';sync.job.finishedAt=new Date(now).toISOString();sync.lastError=sync.job.error;}}
@@ -335,17 +336,17 @@ function syncWorker_(input){return syncLock_(()=>{
   if(typeof body.agentHash!=='string'||!/^session:[a-f0-9]{64}$/.test(body.agentHash))fail_('Identificador del equipo inválido.');
   properties.setProperty('wms-worker-hash',body.agentHash);properties.deleteProperty('wms-pair');
   const sync=syncRead_();sync.enabled=true;sync.lastHeartbeatAt=new Date().toISOString();syncSave_(sync);
-  return {ok:true,intervalSeconds:300,productionUrl:WMS_PRODUCTION_URL};
+  return {ok:true,intervalSeconds:WMS_INTERVAL_SECONDS,productionUrl:WMS_PRODUCTION_URL};
  }
  if(typeof input.token!=='string'||input.token.length<40||sessionKey_(input.token)!==properties.getProperty('wms-worker-hash'))fail_('Equipo no autorizado.',401);
  const body=unpack_(input.body||{}),sync=syncRead_(),now=Date.now();syncExpire_(sync,now);sync.lastHeartbeatAt=new Date(now).toISOString();
  if(input.op==='worker-poll'){
-  if(sync.enabled&&(!sync.lastAttemptAt||now-Date.parse(sync.lastAttemptAt)>=300000))syncQueue_(sync,'automatic','Automático WMS');
+  if(sync.enabled&&(!sync.lastAttemptAt||now-Date.parse(sync.lastAttemptAt)>=WMS_INTERVAL_SECONDS*1000))syncQueue_(sync,'automatic','Automático WMS');
   if(sync.job&&sync.job.status==='pending'){
    const meta=syncMeta_();sync.job.status='running';sync.job.stage='Descargando stock';sync.job.startedAt=new Date(now).toISOString();sync.job.leaseUntil=now+180000;sync.job.baseImportId=meta.importId||null;sync.lastAttemptAt=sync.job.startedAt;
-   syncSave_(sync);return {job:{id:sync.job.id,startedAt:sync.job.startedAt},intervalSeconds:300,productionUrl:WMS_PRODUCTION_URL};
+   syncSave_(sync);return {job:{id:sync.job.id,startedAt:sync.job.startedAt},intervalSeconds:WMS_INTERVAL_SECONDS,productionUrl:WMS_PRODUCTION_URL};
   }
-  syncSave_(sync);return {job:null,intervalSeconds:300};
+  syncSave_(sync);return {job:null,intervalSeconds:WMS_INTERVAL_SECONDS};
  }
  const job=sync.job;
  if(!job||job.id!==body.jobId)fail_('La solicitud ya no está vigente.',409);

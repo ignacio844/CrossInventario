@@ -51,13 +51,29 @@ test('rechaza otra URL o depósito y mantiene la foto anterior ante errores',()=
  s.worker('worker-error',{jobId:job.id,error:'Sin conexión'});assert.equal(s.context.saves,0);assert.equal(s.context.data.wms[0][0],'OLD');
  assert.equal(s.request().coalesced,false);
 });
-test('el ciclo automático respeta cinco minutos y las credenciales desconocidas no se aceptan',()=>{
+test('el ciclo automático respeta quince minutos y las credenciales desconocidas no se aceptan',()=>{
  const s=setup();const {job}=s.worker('worker-poll');s.worker('worker-complete',s.payload(job));
- s.clock.now+=299000;assert.equal(s.worker('worker-poll').job,null);s.clock.now+=1000;assert.ok(s.worker('worker-poll').job);
+ assert.equal(s.worker('worker-poll').intervalSeconds,900);s.clock.now+=899000;assert.equal(s.worker('worker-poll').job,null);s.clock.now+=1000;assert.ok(s.worker('worker-poll').job);
  assert.throws(()=>s.call('syncWorker_(args)',{op:'worker-poll',token:'fake-token-with-at-least-40-characters-long'}),/autorizado/);
  assert.ok(s.call("syncUser_('wms-pair',args)",{email:'operario@example.com',role:'C-Administrativo'}).code);
 });
 test('el vencimiento de un trabajo impide confirmar una descarga interrumpida',()=>{
  const s=setup(),{job}=s.worker('worker-poll');s.clock.now+=181000;
  assert.throws(()=>s.worker('worker-complete',s.payload(job)),/activa/);assert.equal(s.context.saves,0);
+});
+
+test('el botón manual sigue disponible antes de los quince minutos y actualiza el próximo ciclo',()=>{
+ const s=setup(),first=s.worker('worker-poll');s.worker('worker-complete',s.payload(first.job));
+ s.clock.now+=5*60*1000;assert.equal(s.worker('worker-poll').job,null);
+ s.request();const manual=s.worker('worker-poll');assert.ok(manual.job);s.worker('worker-complete',s.payload(manual.job));
+ s.clock.now+=899000;assert.equal(s.worker('worker-poll').job,null);
+ s.clock.now+=1000;assert.ok(s.worker('worker-poll').job);
+});
+
+test('una configuración histórica de cinco minutos adopta el nuevo intervalo sin reconectar el equipo',()=>{
+ const s=setup(),value=s.call('syncRead_()');value.intervalSeconds=300;
+ s.call('syncSave_(args)',value);assert.equal(s.call('syncRead_()').intervalSeconds,900);
+ assert.equal(s.call('syncPublic_()').intervalSeconds,900);
+ const first=s.worker('worker-poll');s.worker('worker-complete',s.payload(first.job));
+ s.clock.now+=300000;assert.equal(s.worker('worker-poll').job,null);
 });
