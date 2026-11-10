@@ -1,5 +1,6 @@
 {
   "name": "cross-inventario",
+  "account_id": "50f264a0d2db9c45c304350c213bf0df",
   "main": "cloudflare/worker.js",
   "compatibility_date": "2026-11-10",
   "workers_dev": true,

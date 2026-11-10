@@ -1,5 +1,7 @@
 # Cloudflare · Control de inventario
 
+URL operativa: https://cross-inventario.ignacio-50f.workers.dev
+
 La aplicación React y su gateway se publican juntos con Workers Static Assets. Se conservan Google Sheets, Apps Script, las sesiones Google, los identificadores de operación y el descargador de producción. El archivo `wrangler.jsonc` solo contiene identificadores públicos; no necesita contraseñas ni claves SGL.
 
 1. Autorizar la herramienta oficial: `npx wrangler@4 login`.
