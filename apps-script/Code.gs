@@ -57,7 +57,7 @@ function reconcile(data) {
     r.expectedPositions=[...new Set(r.oldDetails.flatMap(d=>[...(oldLinks.get(octPositionKey(d.position))||[])]))].sort();
     r.locationMatches=!r.wmsPresent?null:!r.mapped?false:r.oldPresent?r.wmsDetails.every(d=>r.expectedPositions.includes(wmsKey(d.position))):r.wmsDetails.every(d=>reverseLinks.has(wmsKey(d.position)));
     r.fingerprint=fingerprint([r.oldDetails.slice().sort((a,b)=>JSON.stringify(a).localeCompare(JSON.stringify(b))),r.wmsDetails.slice().sort((a,b)=>JSON.stringify(a).localeCompare(JSON.stringify(b))),r.positions,r.oldPositions,r.saleUnit]);
-    r.referenceFingerprint=fingerprint([r.oldDetails.slice().sort((a,b)=>JSON.stringify(a).localeCompare(JSON.stringify(b))),r.positions,r.oldPositions,r.saleUnit]);
+    r.referenceFingerprint=fingerprint([r.oldDetails.slice().sort((a,b)=>JSON.stringify(a).localeCompare(JSON.stringify(b))),groups.get(r.group)?.positions??[r.group.slice(2)],r.oldPositions,r.saleUnit]);
     const saved=data.cases[r.id];r.review=saved??{};r.caseVersion=JSON.stringify([r.fingerprint,saved?.decisionRevision||0,saved?.status||null,saved?.fingerprint||null,saved?.updatedAt||null,saved?.updatedBy||null]);r.changed=!!saved?.fingerprint&&saved.fingerprint!==r.fingerprint;
     r.closurePreserved=r.changed&&closureReferenceMatches(r,saved,data.meta);
     // A new WMS destination is a location change, not merely a quantity change.

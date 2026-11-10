@@ -61,3 +61,8 @@ test('no crea cierres para nuevas diferencias ni reemplaza solicitudes C2 existe
  const data=source();assert.equal(preserveAutomaticClosures(data,changeQuantity(data,70).wms),data);
  const c2=save(data,'request-c2');c2.wms[0][1]=100;assert.equal(preserveAutomaticClosures(c2,changeQuantity(c2,70).wms),c2);
 });
+
+test('un artículo solo WMS y sin cross también conserva su cierre al agotarse',()=>{
+ const data=source();data.octosis=[];data.cross=[];const saved=save(data,'accept');
+ const current=tableRow(row({...saved,wms:[]}));assert.equal(current.historicalOnly,true);assert.equal(current.status,'Aceptado');assert.equal(current.closurePreserved,true);assert.equal(current.wmsPresent,false);assert.equal(current.pendingDelta,0);
+});
