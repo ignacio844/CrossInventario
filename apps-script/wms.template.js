@@ -1,6 +1,6 @@
 const WMS_PRODUCTION_URL='https://wms.grupo-aftermarket.com:4446/SGLWMS_DISTRIMAR_PROD/hinicio.aspx';
 const WMS_SYNC_KEY='wms-sync-v1';
-const WMS_INTERVAL_SECONDS=15*60;
+const WMS_INTERVAL_SECONDS=60*60;
 function syncRead_(){const value=PropertiesService.getScriptProperties().getProperty(WMS_SYNC_KEY);return {...(value?JSON.parse(value):{enabled:false,job:null}),intervalSeconds:WMS_INTERVAL_SECONDS};}
 function syncSave_(value){PropertiesService.getScriptProperties().setProperty(WMS_SYNC_KEY,JSON.stringify(value));CacheService.getScriptCache().remove(WMS_SYNC_KEY);}
 function syncPublic_(){

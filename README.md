@@ -16,7 +16,7 @@ La migración de alojamiento se publica con `wrangler.jsonc`. Ver **DEPLOY_CLOUD
 
 Seguir **DEPLOY_VERCEL.md**. Vercel sirve React y una funcion sin estado conecta con Apps Script. Apps Script verifica Google, asigna roles y coordina escrituras concurrentes en Sheets. La planilla inicial ya fue creada con los cuatro archivos. El despliegue lo realiza el usuario; no requiere cuenta de servicio ni clave privada.
 
-La app consulta cambios cada 8–10 segundos, sin superponer consultas. El descargador local consulta SGL de producción cada quince minutos y a solicitud del botón Descargar stock WMS. Ver **WMS_PRODUCCION.md** para conectar el equipo. No editar directamente las pestañas de datos durante el operativo.
+La app consulta cambios cada 8–10 segundos, sin superponer consultas. El descargador local consulta SGL de producción cada una hora y a solicitud del botón Descargar stock WMS. Ver **WMS_PRODUCCION.md** para conectar el equipo. No editar directamente las pestañas de datos durante el operativo.
 
 El servidor Node queda como alternativa local o para una sola instancia persistente; no es el backend de Vercel. DEPLOY_GOOGLE.md describe esa alternativa.
 

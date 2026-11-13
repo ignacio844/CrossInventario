@@ -243,7 +243,7 @@ def main():
         awake=os.name=='nt' and config.get('WMS_KEEP_AWAKE','true').lower()=='true'
         if awake:ctypes.windll.kernel32.SetThreadExecutionState(0x80000001)
         try:
-            log('Descargador iniciado. Producción / CD ESCOBAR. Automático cada 15 minutos y solicitudes de la app.')
+            log('Descargador iniciado. Producción / CD ESCOBAR. Automático cada 1 hora y solicitudes de la app.')
             while True:
                 try:
                     response=backend.call('worker-poll')

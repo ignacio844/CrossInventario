@@ -6,7 +6,7 @@
 
 ## Flujo
 
-El descargador se ejecuta en esta computadora Windows y se conecta hacia Apps Script por HTTPS. Vercel no necesita acceder a la computadora ni publicar un puerto local. El botón de la app y el ciclo de quince minutos utilizan una misma cola. Si coinciden varias solicitudes, se aprovecha la descarga activa.
+El descargador se ejecuta en esta computadora Windows y se conecta hacia Apps Script por HTTPS. Vercel no necesita acceder a la computadora ni publicar un puerto local. El botón de la app y el ciclo de una hora utilizan una misma cola. Si coinciden varias solicitudes, se aprovecha la descarga activa.
 
 El equipo inicia sesión en SGL con la cuenta local, selecciona CD ESCOBAR (valor 1), confirma el depósito en la sesión y abre el Tablero Comando aunque SGL lo deje en Inicio. Después exporta el icono Excel del bloque Stocks. Esa exportación es TC_Stock.xlsx y conserva artículo, unidades, posición, profundidad, contenedor y bultos. No modifica inventarios ni ejecuta ajustes en SGL.
 
@@ -36,7 +36,7 @@ Si se reconecta un equipo ya activo, detener el descargador antes de registrar l
 
 El proceso mantiene Windows despierto mientras está activo; no cambia permanentemente los ajustes de energía. La pantalla puede apagarse. Suspender manualmente el equipo, cerrar la sesión Windows o cortar la conexión interrumpe el servicio. Tras reiniciar, el descargador vuelve a arrancar cuando el usuario entra a Windows. La app indica cuando el equipo deja de responder.
 
-El intervalo automático es de quince minutos desde el inicio del último intento, con un sondeo del equipo cada diez segundos. El avance se comparte en la app: pendiente, descargando, validando y guardando. Los fallos aparecen en pantalla y en `.wms/worker.log`.
+El intervalo automático es de una hora desde el inicio del último intento, con un sondeo del equipo cada diez segundos. El avance se comparte en la app: pendiente, descargando, validando y guardando. Los fallos aparecen en pantalla y en `.wms/worker.log`.
 
 ## Detener y diagnosticar
 
