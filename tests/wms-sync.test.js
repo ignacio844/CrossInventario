@@ -51,9 +51,9 @@ test('rechaza otra URL o depósito y mantiene la foto anterior ante errores',()=
  s.worker('worker-error',{jobId:job.id,error:'Sin conexión'});assert.equal(s.context.saves,0);assert.equal(s.context.data.wms[0][0],'OLD');
  assert.equal(s.request().coalesced,false);
 });
-test('el ciclo automático respeta una hora y las credenciales desconocidas no se aceptan',()=>{
+test('el ciclo automático respeta tres días y las credenciales desconocidas no se aceptan',()=>{
  const s=setup();const {job}=s.worker('worker-poll');s.worker('worker-complete',s.payload(job));
- assert.equal(s.worker('worker-poll').intervalSeconds,3600);s.clock.now+=3599000;assert.equal(s.worker('worker-poll').job,null);s.clock.now+=1000;assert.ok(s.worker('worker-poll').job);
+ assert.equal(s.worker('worker-poll').intervalSeconds,259200);s.clock.now+=259199000;assert.equal(s.worker('worker-poll').job,null);s.clock.now+=1000;assert.ok(s.worker('worker-poll').job);
  assert.throws(()=>s.call('syncWorker_(args)',{op:'worker-poll',token:'fake-token-with-at-least-40-characters-long'}),/autorizado/);
  assert.ok(s.call("syncUser_('wms-pair',args)",{email:'operario@example.com',role:'C-Administrativo'}).code);
 });
@@ -62,20 +62,22 @@ test('el vencimiento de un trabajo impide confirmar una descarga interrumpida',(
  assert.throws(()=>s.worker('worker-complete',s.payload(job)),/activa/);assert.equal(s.context.saves,0);
 });
 
-test('el botón manual sigue disponible antes de una hora y actualiza el próximo ciclo',()=>{
+test('el botón manual sigue disponible antes de tres días y actualiza el próximo ciclo',()=>{
  const s=setup(),first=s.worker('worker-poll');s.worker('worker-complete',s.payload(first.job));
  s.clock.now+=5*60*1000;assert.equal(s.worker('worker-poll').job,null);
  s.request();const manual=s.worker('worker-poll');assert.ok(manual.job);s.worker('worker-complete',s.payload(manual.job));
- s.clock.now+=3599000;assert.equal(s.worker('worker-poll').job,null);
+ s.clock.now+=259199000;assert.equal(s.worker('worker-poll').job,null);
  s.clock.now+=1000;assert.ok(s.worker('worker-poll').job);
 });
 
-test('una configuración histórica de cinco minutos adopta el nuevo intervalo sin reconectar el equipo',()=>{
- const s=setup(),value=s.call('syncRead_()');value.intervalSeconds=300;
- s.call('syncSave_(args)',value);assert.equal(s.call('syncRead_()').intervalSeconds,3600);
- assert.equal(s.call('syncPublic_()').intervalSeconds,3600);
+test('las configuraciones históricas adoptan tres días sin reconectar el equipo',()=>{
+ for(const previousInterval of [300,900,3600]){
+ const s=setup(),value=s.call('syncRead_()');value.intervalSeconds=previousInterval;
+ s.call('syncSave_(args)',value);assert.equal(s.call('syncRead_()').intervalSeconds,259200);
+ assert.equal(s.call('syncPublic_()').intervalSeconds,259200);
  const first=s.worker('worker-poll');s.worker('worker-complete',s.payload(first.job));
- s.clock.now+=300000;assert.equal(s.worker('worker-poll').job,null);
+ s.clock.now+=previousInterval*1000;assert.equal(s.worker('worker-poll').job,null);
+ }
 });
 
 test('la descarga guarda el cierre automático anterior junto al stock nuevo y su auditoría',()=>{
